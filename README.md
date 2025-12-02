@@ -1,5 +1,7 @@
 # TAP-Minecraft-Agent-Framework
 
+[🇬🇧 English](README.en.md)
+
 Este proyecto integra un entorno de servidor Minecraft con un sistema multi-agente programable en Python, orientado a la experimentación y desarrollo de agentes inteligentes dentro del mundo de Minecraft.
 
 ## Estructura del Proyecto

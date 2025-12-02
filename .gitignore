@@ -205,3 +205,7 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+AdventuresInMinecraft-PC/Server/world/*
+AdventuresInMinecraft-PC/Server/world_nether/*
+AdventuresInMinecraft-PC/Server/world_the_end/*
