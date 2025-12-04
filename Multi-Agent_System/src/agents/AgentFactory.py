@@ -27,16 +27,20 @@ class AgentFactory:
         
         cls._agent_registry[agent_name] = agent_class
 
-    def create_agent(self, agent_type: str, mc, message_bus):
+    def create_agent(self, agent_type: str, mc, message_bus, agent_id: str = None):
         """
         Crea una instancia de agente basada en el tipo solicitado.
+        Si no se especifica agent_id, se usa el agent_type (cuidado con duplicados).
         """
         agent_class = self._agent_registry.get(agent_type)
         
         if agent_class is None:
             raise ValueError(f"Tipo de Agente no registrado: {agent_type}")
         
-        return agent_class(agent_type, mc, message_bus)
+        # Usar el ID proporcionado o el tipo por defecto
+        final_id = agent_id if agent_id else agent_type
+        
+        return agent_class(final_id, mc, message_bus)
 
     def list_available_agents(self):
         """Retorna una lista de agentes registrados (ej: para el comando /agent help)."""

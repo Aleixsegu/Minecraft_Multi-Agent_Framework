@@ -27,7 +27,7 @@ def init_mc():
 # ---------------------------------------------------------------------
 # REGISTRO DE AGENTES
 # ---------------------------------------------------------------------
-def register_agents(factory, agents_dir="agents"):
+def register_agents(factory, agents_dir):
     """
     Escanea el directorio 'agents/' para encontrar e importar clases que
     hereden de BaseAgent y las registra en AgentFactory con Reflexión.
@@ -50,6 +50,7 @@ def register_agents(factory, agents_dir="agents"):
                     # 2. Registra la clase encontrada
                     # Usamos el nombre de la clase (ej: 'ExplorerBot') como clave
                     factory.register_agent_class(obj.__name__, obj)
+
 # ---------------------------------------------------------------------
 # LÓGICA PRINCIPAL
 # ---------------------------------------------------------------------
@@ -69,10 +70,10 @@ async def main():
     print(factory.list_available_agents())
 
     # Creación de agentes con factory
-    explorerBot = factory.create_agent("ExplorerBot", mc, message_bus)
-    explorerBot2 = factory.create_agent("ExplorerBot", mc, message_bus)
-    minerBot = factory.create_agent("MinerBot", mc, message_bus)
-    builderBot = factory.create_agent("BuilderBot", mc, message_bus)
+    explorerBot = factory.create_agent("ExplorerBot", mc, message_bus, agent_id="ExplorerBot1")
+    explorerBot2 = factory.create_agent("ExplorerBot", mc, message_bus, agent_id="ExplorerBot2")
+    minerBot = factory.create_agent("MinerBot", mc, message_bus, agent_id="MinerBot1")
+    builderBot = factory.create_agent("BuilderBot", mc, message_bus, agent_id="BuilderBot1")
 
     # Registrar en el bus
     message_bus.register_agent(explorerBot.id)
@@ -80,13 +81,8 @@ async def main():
     message_bus.register_agent(minerBot.id)
     message_bus.register_agent(builderBot.id)
 
-    # Iniciar agentes
-    await asyncio.gather(
-        explorerBot.run(),
-        explorerBot2.run(),
-        minerBot.run(),
-        builderBot.run()
-    )
+    explorerBot.start()
+
 
 
 # ---------------------------------------------------------------------

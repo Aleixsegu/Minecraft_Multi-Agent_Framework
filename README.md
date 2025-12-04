@@ -6,15 +6,21 @@ Este proyecto integra un entorno de servidor Minecraft con un sistema multi-agen
 
 ## Estructura del Proyecto
 
-- **AdventuresInMinecraft-PC-master/**: Contiene el servidor de Minecraft preconfigurado (versión 1.12) y los recursos necesarios para la conexión con agentes externos.
-  - `Server/`: Archivos del servidor, configuración y plugins (incluyendo RaspberryJuice para la API de Python).
-  - `StartServer.bat`: Script para iniciar el servidor de Minecraft fácilmente en Windows.
+- **AdventuresInMinecraft-PC/**: Contiene el servidor de Minecraft preconfigurado (versión 1.12) y los recursos necesarios para la conexión con agentes externos.
+  - `README.md`: Información específica del entorno del servidor.
+  - `StartServer.bat`: Script para iniciar el servidor fácilmente en Windows.
+  - `Server/`: Archivos del servidor, configuración y plugins.
 - **Multi-Agent_System/**: Plataforma en Python para el desarrollo y ejecución de agentes que interactúan con el mundo de Minecraft.
-  - `main.py`: Punto de entrada para el sistema multi-agente.
-  - `agents/`: Implementaciones de agentes (por ejemplo, BuilderBot, ExplorerBot, MinerBot).
-  - `mcpi/`: Librería Python para interactuar con Minecraft a través de RaspberryJuice.
-  - `message_bus.py`: (Por implementar) Módulo para la comunicación entre agentes.
-  - `commands/`, `strategies/`, `utils/`, `tests/`: Directorios para comandos, estrategias, utilidades y pruebas del sistema multi-agente.
+  - `checkpoints/`: Carpeta para puntos de control o guardado.
+  - `logs/`: Registros de ejecución de los agentes y el sistema.
+  - `src/`: Código fuente principal del sistema multi-agente.
+    - `main.py`: Punto de entrada principal.
+    - `agents/`: Implementaciones de agentes (BuilderBot, ExplorerBot, MinerBot, etc.).
+    - `mcpi/`: Librería Python para interactuar con Minecraft vía RaspberryJuice.
+    - `strategies/`: Carpeta para estrategias de agentes.
+    - `structures/`: Carpeta para estructuras.
+    - `utils/`: Utilidades del sistema (parser, logging, bus de mensajes, etc.).
+  - `tests/`: Carpeta para pruebas adicionales.
 
 ## Requisitos
 
@@ -27,7 +33,7 @@ Este proyecto integra un entorno de servidor Minecraft con un sistema multi-agen
 ### 1. Iniciar el Servidor de Minecraft
 
 1. Abre una terminal en Windows.
-2. Navega a la carpeta `AdventuresInMinecraft-PC-master`.
+2. Navega a la carpeta `AdventuresInMinecraft-PC`.
 3. Ejecuta el script:
    ```powershell
    StartServer.bat
@@ -37,8 +43,8 @@ Este proyecto integra un entorno de servidor Minecraft con un sistema multi-agen
 ### 2. Ejecutar el Sistema Multi-Agente
 
 1. Abre otra terminal.
-2. Navega a la carpeta `Multi-Agent_System`.
-3. Ejecuta tu agente o el sistema principal:
+2. Navega a la carpeta `Multi-Agent_System/src`.
+3. Ejecuta el sistema principal:
    ```powershell
    python main.py
    ```

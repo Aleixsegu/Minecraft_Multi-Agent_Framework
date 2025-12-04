@@ -211,3 +211,4 @@ AdventuresInMinecraft-PC/Server/world_nether/*
 AdventuresInMinecraft-PC/Server/world_the_end/*
 AdventuresInMinecraft-PC/Server/logs/*
 Multi-Agent_System/logs/*
+Multi-Agent_System/checkpoints/*

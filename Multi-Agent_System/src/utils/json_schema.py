@@ -3,12 +3,12 @@ import datetime
 
 
 class SchemaError(Exception):
-    """Raised when a message does not satisfy the required schema."""
+    """Se lanza cuando un mensaje no tiene el formato requerido"""
     pass
 
 
 def is_iso8601(timestamp: str) -> bool:
-    """Checks that the timestamp follows ISO 8601 format."""
+    """Comprueba si el timestamp sigue el formato ISO 8601."""
     try:
         datetime.datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
         return True
@@ -18,9 +18,9 @@ def is_iso8601(timestamp: str) -> bool:
 
 def validate_message(msg: dict):
     """
-    Validates a message according to the TAP Minecraft Framework specification.
-
-    Required fields:
+    Valida un mensaje según la especificación.
+    
+    Campos obligatorios:
     - type: str
     - source: str
     - target: str
@@ -31,48 +31,47 @@ def validate_message(msg: dict):
     """
 
     if not isinstance(msg, dict):
-        raise SchemaError("Message must be a dictionary.")
+        raise SchemaError("El mensaje debe ser un diccionario.")
 
     required = ["type", "source", "target", "timestamp", "payload", "status"]
 
     for field in required:
         if field not in msg:
-            raise SchemaError(f"Missing required field: {field}")
+            raise SchemaError(f"Falta el campo obligatorio: {field}")
 
     # type
     if not isinstance(msg["type"], str):
-        raise SchemaError("Field 'type' must be a string.")
+        raise SchemaError("El campo 'type' debe ser una cadena.")
 
     # source
     if not isinstance(msg["source"], str):
-        raise SchemaError("Field 'source' must be a string.")
+        raise SchemaError("El campo 'source' debe ser una cadena.")
 
     # target
     if not isinstance(msg["target"], str):
-        raise SchemaError("Field 'target' must be a string.")
+        raise SchemaError("El campo 'target' debe ser una cadena.")
 
     # timestamp
     if not isinstance(msg["timestamp"], str) or not is_iso8601(msg["timestamp"]):
-        raise SchemaError("Field 'timestamp' must be a valid ISO8601 string.")
+        raise SchemaError("El campo 'timestamp' debe ser una cadena con formato ISO8601.")
 
     # payload
     if not isinstance(msg["payload"], dict):
-        raise SchemaError("Field 'payload' must be a dict.")
+        raise SchemaError("El campo 'payload' debe ser un diccionario.")
 
     # status
     valid_status = {"SUCCESS", "ERROR", "RUNNING", "PROCESSING", "WAITING"}
 
     if not isinstance(msg["status"], str):
-        raise SchemaError("Field 'status' must be a string.")
+        raise SchemaError("El campo 'status' debe ser una cadena.")
 
     if msg["status"] not in valid_status:
         raise SchemaError(
-            f"Invalid status '{msg['status']}'. Must be one of: {valid_status}"
-        )
+            f"El campo 'status' debe ser una cadena.")
 
-    # context (optional)
+    # context (opcional)
     if "context" in msg and not isinstance(msg["context"], dict):
-        raise SchemaError("Field 'context' must be a dictionary if present.")
+        raise SchemaError("El campo 'context' debe ser un diccionario si está presente.")
 
-    # If everything passed, message is valid
+    # Si todo pasa, el mensaje es válido
     return True

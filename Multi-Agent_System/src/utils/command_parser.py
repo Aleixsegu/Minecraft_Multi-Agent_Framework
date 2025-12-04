@@ -1,6 +1,6 @@
 import time
 from utils.json_schema import validate_message
-from utils.logging import log_event
+from utils.logging import Logger
 
 
 class CommandParser:
@@ -20,6 +20,7 @@ class CommandParser:
 
     def __init__(self, message_bus):
         self.bus = message_bus
+        self.logger = Logger("CommandParser")
 
     # ---------------------------------------------------------
     # PUBLIC API
@@ -47,10 +48,7 @@ class CommandParser:
         elif main == "agent":
             await self._parse_agent(parts[1:])
         else:
-            await log_event({
-                "event": "unknown_command",
-                "command": text,
-            })
+            self.logger.info("unknown_command", context={"command": text})
 
     # ---------------------------------------------------------
     # EXPLORER COMMANDS

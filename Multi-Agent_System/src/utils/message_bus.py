@@ -1,25 +1,19 @@
-# message_bus.py
-
+# utils.message_bus.py
 
 import asyncio
-from utils.logging import log_event
+from utils.logging import Logger
 from utils.json_schema import validate_message
 
 
 class MessageBus:
     """
-    Central asynchronous communication system for all agents.
-    Agents communicate using JSON messages validated against a schema.
-
-    Features:
-    - Each agent has its own inbox (async Queue)
-    - Messages are validated before delivery
-    - All traffic is logged (sent + received)
-    - Supports direct sending and broadcast
+    Comunicación asíncrona central para todos los agentes.
+    Los agentes se comunican usando mensajes JSON validados con json_schema.
     """
 
     def __init__(self):
         self.queues = {}  # agent_id → asyncio.Queue
+        self.logger = Logger("MessageBus")
 
     # ------------------------------------------------------------
     # Agent registration
@@ -39,12 +33,7 @@ class MessageBus:
         validate_message(msg)
 
         # log outgoing message
-        await log_event({
-            "event": "message_sent",
-            "source": source,
-            "target": target,
-            "message": msg
-        })
+        self.logger.log_message("SENT", "direct", source, target, msg)
 
         if target not in self.queues:
             raise ValueError(f"Target agent '{target}' is not registered.")
@@ -60,12 +49,7 @@ class MessageBus:
         validate_message(msg)
 
         for target in self.queues:
-            await log_event({
-                "event": "broadcast_sent",
-                "source": source,
-                "target": target,
-                "message": msg
-            })
+            self.logger.log_message("SENT", "broadcast", source, target, msg)
             await self.queues[target].put(msg)
 
     # ------------------------------------------------------------
@@ -82,10 +66,8 @@ class MessageBus:
 
         msg = await self.queues[agent_id].get()
 
-        await log_event({
-            "event": "message_received",
-            "target": agent_id,
-            "message": msg
-        })
+        # Extract source if available in msg, otherwise unknown
+        source = msg.get('from', 'unknown')
+        self.logger.log_message("RECEIVED", "any", source, agent_id, msg)
 
         return msg

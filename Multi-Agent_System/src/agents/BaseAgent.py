@@ -2,20 +2,20 @@ import asyncio
 import time
 from abc import ABC, abstractmethod
 from agents.state_model import State
-from utils.logging import log_event
-from utils.checkpoints import save_checkpoint, load_checkpoint
+from utils.logging import Logger
+from utils.checkpoints import Checkpoints
 
 
 class BaseAgent(ABC):
     """
-    Base class for all Minecraft agents.
-    Implements:
-    - Perception → Decision → Action cycle
-    - Unified FSM (IDLE, RUNNING, PAUSED, WAITING, STOPPED, ERROR)
-    - Control command handling (pause/resume/stop/update)
-    - Structured logging
-    - Checkpointing for recovery
-    - Async execution
+    Clase base para todos los agentes.
+    Implementa:
+    - Ciclo Percepción → Decisión → Acción
+    - FSM Unificado (IDLE, RUNNING, PAUSED, WAITING, STOPPED, ERROR)
+    - Manejo de comandos (pause/resume/stop/update)
+    - Logging estructurado
+    - Checkpointing para recuperación
+    - Ejecución asíncrona
     """
 
     def __init__(self, agent_id: str, mc, message_bus):
@@ -24,33 +24,33 @@ class BaseAgent(ABC):
         self.bus = message_bus
         self.state = State.IDLE
         self.context = {}
-
-        # checkpoint file
-        self.checkpoint_file = f"checkpoints/{self.id}.json"
+        self.logger = Logger(agent_id)
+        self.checkpoint = Checkpoints(agent_id)
 
     # --------------------------------------------------------
-    # Abstract PDA methods
+    # Métodos abstractos PDA
     # --------------------------------------------------------
     @abstractmethod
     async def perceive(self):
-        """Reads environment or incoming messages."""
+        """Lee el entorno o mensajes entrantes."""
         pass
 
     @abstractmethod
     async def decide(self):
-        """Computes next action based on perception."""
-        pass
+        """Computa la próxima acción basada en la percepción."""
+        pass    
 
     @abstractmethod
     async def act(self):
-        """Executes the chosen action."""
+        """Ejecuta la acción seleccionada."""
         pass
 
     # --------------------------------------------------------
-    # Main execution loop
+    # Bucle principal
     # --------------------------------------------------------
     async def run(self):
-        """Main agent loop, driven by FSM state."""
+        """Bucle principal del agente, controlado por el estado FSM."""
+        
         await self.set_state(State.IDLE, reason="initialization")
 
         while self.state != State.STOPPED:
@@ -71,38 +71,34 @@ class BaseAgent(ABC):
                 except Exception as e:
                     await self.set_state(State.ERROR, reason=str(e))
 
-            await asyncio.sleep(0)  # yield to event loop
+            await asyncio.sleep(0) 
 
     # --------------------------------------------------------
-    # State machine
+    # Máquina de estados
     # --------------------------------------------------------
     async def set_state(self, new_state: State, reason=""):
+        """Cambia el estado del agente."""
         prev_state = self.state
         self.state = new_state
 
-        await log_event({
-            "event": "state_transition",
-            "agent": self.id,
-            "previous": prev_state.value,
-            "next": new_state.value,
-            "reason": reason,
-            "timestamp": time.time(),
-        })
+        # log de la transición
+        self.logger.log_transition(prev_state, new_state, reason)
 
-        # STOPPED / ERROR → save checkpoint
+        # si es STOPPED o ERROR, save checkpoint
         if new_state in (State.STOPPED, State.ERROR):
-            save_checkpoint(self.checkpoint_file, self.context)
+            self.checkpoint.save(self.context)
 
     # --------------------------------------------------------
-    # Command handling
+    # Manejo de comandos
     # --------------------------------------------------------
     async def handle_command(self, command: str, payload=None):
+        """Maneja comandos externos."""
 
         if command == "pause":
             await self.set_state(State.PAUSED, "paused by command")
 
         elif command == "resume":
-            self.context = load_checkpoint(self.checkpoint_file)
+            self.context = self.checkpoint.load()
             await self.set_state(State.RUNNING, "resumed")
 
         elif command == "stop":
@@ -114,8 +110,4 @@ class BaseAgent(ABC):
             await self.set_state(State.RUNNING, "updated configuration")
 
         else:
-            await log_event({
-                "event": "unknown_command",
-                "agent": self.id,
-                "command": command
-            })
+            self.logger.error("unknown_command", context={"command": command})

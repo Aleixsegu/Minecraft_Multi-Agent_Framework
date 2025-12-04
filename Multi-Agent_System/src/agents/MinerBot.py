@@ -3,7 +3,8 @@ import time
 from agents.BaseAgent import BaseAgent
 
 
-class BuilderBot(BaseAgent):
+
+class MinerBot(BaseAgent):
  
     def __init__(self, agent_id,mc,  bus):
         super().__init__(agent_id, mc, bus)     
