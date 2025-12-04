@@ -1,6 +1,6 @@
 from enum import Enum
 
-class StateModel(Enum):
+class State(Enum):
     IDLE = "IDLE"
     RUNNING = "RUNNING"
     PAUSED = "PAUSED"

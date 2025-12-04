@@ -1,8 +1,9 @@
 # message_bus.py
 
+
 import asyncio
 from utils.logging import log_event
-from json_schema import validate_message
+from utils.json_schema import validate_message
 
 
 class MessageBus:

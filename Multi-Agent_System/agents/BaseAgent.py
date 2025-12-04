@@ -1,9 +1,7 @@
-# base/base_agent.py
-
 import asyncio
 import time
 from abc import ABC, abstractmethod
-from state import StateModel
+from agents.state_model import State
 from utils.logging import log_event
 from utils.checkpoints import save_checkpoint, load_checkpoint
 
@@ -20,10 +18,11 @@ class BaseAgent(ABC):
     - Async execution
     """
 
-    def __init__(self, agent_id: str, message_bus):
+    def __init__(self, agent_id: str, mc, message_bus):
+        self.mc = mc
         self.id = agent_id
         self.bus = message_bus
-        self.state = StateModel.IDLE
+        self.state = State.IDLE
         self.context = {}
 
         # checkpoint file
@@ -52,32 +51,32 @@ class BaseAgent(ABC):
     # --------------------------------------------------------
     async def run(self):
         """Main agent loop, driven by FSM state."""
-        await self.set_state(StateModel.IDLE, reason="initialization")
+        await self.set_state(State.IDLE, reason="initialization")
 
-        while self.state != StateModel.STOPPED:
+        while self.state != State.STOPPED:
 
-            if self.state == StateModel.PAUSED:
+            if self.state == State.PAUSED:
                 await asyncio.sleep(0.2)
                 continue
 
-            if self.state == StateModel.IDLE:
+            if self.state == State.IDLE:
                 await asyncio.sleep(0.1)
                 continue
 
-            if self.state == StateModel.RUNNING:
+            if self.state == State.RUNNING:
                 try:
                     await self.perceive()
                     await self.decide()
                     await self.act()
                 except Exception as e:
-                    await self.set_state(StateModel.ERROR, reason=str(e))
+                    await self.set_state(State.ERROR, reason=str(e))
 
             await asyncio.sleep(0)  # yield to event loop
 
     # --------------------------------------------------------
     # State machine
     # --------------------------------------------------------
-    async def set_state(self, new_state: StateModel, reason=""):
+    async def set_state(self, new_state: State, reason=""):
         prev_state = self.state
         self.state = new_state
 
@@ -91,7 +90,7 @@ class BaseAgent(ABC):
         })
 
         # STOPPED / ERROR → save checkpoint
-        if new_state in (StateModel.STOPPED, StateModel.ERROR):
+        if new_state in (State.STOPPED, State.ERROR):
             save_checkpoint(self.checkpoint_file, self.context)
 
     # --------------------------------------------------------
@@ -100,19 +99,19 @@ class BaseAgent(ABC):
     async def handle_command(self, command: str, payload=None):
 
         if command == "pause":
-            await self.set_state(StateModel.PAUSED, "paused by command")
+            await self.set_state(State.PAUSED, "paused by command")
 
         elif command == "resume":
             self.context = load_checkpoint(self.checkpoint_file)
-            await self.set_state(StateModel.RUNNING, "resumed")
+            await self.set_state(State.RUNNING, "resumed")
 
         elif command == "stop":
-            await self.set_state(StateModel.STOPPED, "stopped by command")
+            await self.set_state(State.STOPPED, "stopped by command")
 
         elif command == "update":
             if payload:
                 self.context.update(payload)
-            await self.set_state(StateModel.RUNNING, "updated configuration")
+            await self.set_state(State.RUNNING, "updated configuration")
 
         else:
             await log_event({

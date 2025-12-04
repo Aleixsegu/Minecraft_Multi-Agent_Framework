@@ -1,10 +1,9 @@
 # utils/logging.py
 import json
-import aiofiles 
 import time
 from pathlib import Path
 
-LOG_FILE = Path("logs/agent_log.jsonl")
+LOG_FILE = Path(__file__).parent.parent / "logs" / "agent_log.jsonl"
 LOG_FILE.parent.mkdir(exist_ok=True)
 
 async def log_event(data: dict):
@@ -29,8 +28,8 @@ async def log_event(data: dict):
     }
 
     # async, non-blocking log write
-    async with aiofiles.open(LOG_FILE, "a") as f:
-        await f.write(json.dumps(safe_data) + "\n")
+    #async with aiofiles.open(LOG_FILE, "a") as f:
+    #    await f.write(json.dumps(safe_data) + "\n")
 
 
 async def log_info(agent: str, event: str, **metadata):
