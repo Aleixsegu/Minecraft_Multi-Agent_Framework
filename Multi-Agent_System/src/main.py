@@ -1,3 +1,4 @@
+from asyncio.tasks import gather
 import asyncio
 import importlib
 import importlib.util
@@ -6,10 +7,12 @@ import sys
 import os
 
 from mcpi.minecraft import Minecraft
-from utils.message_bus import MessageBus
-from utils.command_parser import CommandParser
+from messages.message_bus import MessageBus
+from messages.message_parser import MessageParser
 from agents.BaseAgent import BaseAgent
 from agents.AgentFactory import AgentFactory
+from messages.chat_listener import ChatListener
+from utils.reflection_get_agents import get_all_agents
 
 # ---------------------------------------------------------------------
 # Lanza el mundo de Minecraft
@@ -29,27 +32,12 @@ def init_mc():
 # ---------------------------------------------------------------------
 def register_agents(factory, agents_dir):
     """
-    Escanea el directorio 'agents/' para encontrar e importar clases que
-    hereden de BaseAgent y las registra en AgentFactory con Reflexión.
+    Usa la utilidad de descubrimiento para encontrar clases de agentes y registrarlas.
     """
-    for filename in os.listdir(agents_dir):
-        # Filtra archivos Python válidos (ej: explorer.py, miner.py)
-        if filename.endswith('.py') and filename not in ('__init__.py', 'base_agent.py', 'agent_factory.py', 'state_model.py'):
-            module_name = filename[:-3] # Quita la extensión .py
-            module_path = os.path.join(agents_dir, filename)
-
-            # Usa importlib para cargar el módulo dinámicamente
-            spec = importlib.util.spec_from_file_location(module_name, module_path)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
-
-            # Inspecciona los miembros del módulo en busca de la clase de agente
-            for name, obj in inspect.getmembers(module):
-                # Comprueba si es una clase, hereda de BaseAgent, y no es la propia BaseAgent
-                if inspect.isclass(obj) and issubclass(obj, BaseAgent) and obj is not BaseAgent:
-                    # 2. Registra la clase encontrada
-                    # Usamos el nombre de la clase (ej: 'ExplorerBot') como clave
-                    factory.register_agent_class(obj.__name__, obj)
+    
+    agents = get_all_agents(agents_dir)
+    for name, cls in agents.items():
+        factory.register_agent_class(name, cls)
 
 # ---------------------------------------------------------------------
 # LÓGICA PRINCIPAL
@@ -61,7 +49,10 @@ async def main():
     mc = init_mc()
 
     message_bus = MessageBus()
-    parser = CommandParser(message_bus)
+    parser = MessageParser(message_bus)
+    listener = ChatListener(parser, mc)
+
+    asyncio.create_task(listener.listen_for_commands())
 
     # Obtener la instancia Singleton del Factory
     factory = AgentFactory()
@@ -81,8 +72,16 @@ async def main():
     message_bus.register_agent(minerBot.id)
     message_bus.register_agent(builderBot.id)
 
-    explorerBot.start()
+    # Iniciar agentes
+    
+    await asyncio.gather(
+        explorerBot.run(),
+        explorerBot2.run(),
+        minerBot.run(),
+        builderBot.run()
+    )
 
+    listener.stop()
 
 
 # ---------------------------------------------------------------------

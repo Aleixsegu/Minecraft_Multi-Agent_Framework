@@ -9,9 +9,6 @@ from agents.state_model import State
 from pathlib import Path
 LOGS_DIR = Path(__file__).resolve().parent.parent.parent / "logs"
 
-# =========================================================================
-# CLASE JSON FORMATTER (Formateador de logs a JSON)
-# =========================================================================
 
 class Json_log_formatter(logging.Formatter):
     """
@@ -25,7 +22,7 @@ class Json_log_formatter(logging.Formatter):
         log_data: Dict[str, Any] = {
             "timestamp": datetime.datetime.fromtimestamp(record.created, tz=datetime.timezone.utc).isoformat().replace('+00:00', 'Z'),
             "level": record.levelname,
-            "agent_id": getattr(record, 'agent_id', 'SYSTEM'),
+            "object": getattr(record, 'object', 'SYSTEM'),
             "module": record.name,
             "message": record.getMessage(),
         }
@@ -41,26 +38,23 @@ class Json_log_formatter(logging.Formatter):
         # Retornar la cadena JSON
         return json.dumps(log_data)
 
-# =========================================================================
-# 2. CLASE LOGGER (Interfaz para los Agentes)
-# =========================================================================
-
 class Logger:
     """
     Clase de interfaz simple para que los agentes realicen logs estructurados.
     """
-    def __init__(self, agent_id: str, log_file_name: str = None, level=logging.INFO):
+    def __init__(self, object: str, log_file_name: str = None, level=logging.DEBUG):
         """
         Inicializa el logger para un agente específico.
-        :param agent_id: Identificador único del agente (para los registros).
-        :param log_file_name: Nombre del archivo de log (sin extensión). Si es None, usa agent_id.
+        :param object: Identificador único del objeto
+        :param log_file_name: Nombre del archivo de log. Si es None, usa object.
         """
 
-        self.agent_id = agent_id
-        # Usamos el nombre del archivo como nombre del logger para agrupar handlers
-        logger_name = log_file_name if log_file_name else agent_id
+        self.object = object
         
-        self.logger = logging.getLogger(f"agent_group.{logger_name}")
+        # Usamos el nombre del archivo como nombre del logger para agrupar handlers
+        logger_name = log_file_name if log_file_name else object
+        
+        self.logger = logging.getLogger(f"group.{logger_name}")
         self.logger.setLevel(level)
 
         # Configuración única del handler y formatter (solo si no existe)
@@ -69,11 +63,7 @@ class Logger:
             os.makedirs(LOGS_DIR, exist_ok=True)
 
             # Configurar el Handler de Archivo
-            # Si log_file_name es "ExplorerBot", el archivo será "ExplorerBot.jsonl"
-            # y todos los agentes que usen este logger escribirán ahí.
-            filename = log_file_name if log_file_name else agent_id
-            
-            file_handler = logging.FileHandler(f"{LOGS_DIR}/{filename}.jsonl", encoding='utf-8')
+            file_handler = logging.FileHandler(f"{LOGS_DIR}/{logger_name}.jsonl", mode='w', encoding='utf-8')
             file_handler.setFormatter(Json_log_formatter())
             self.logger.addHandler(file_handler)
             
@@ -83,22 +73,24 @@ class Logger:
     def info(self, message: str, context: Optional[Dict[str, Any]] = None):
         """Registra un mensaje de nivel INFO."""
 
-        extra = {'agent_id': self.agent_id, 'extra_context': context or {}}
+        extra = {'object': self.object, 'extra_context': context or {}}
         self.logger.info(message, extra=extra)
 
     def debug(self, message: str, context: Optional[Dict[str, Any]] = None):
         """Registra un mensaje de nivel DEBUG."""
 
-        extra = {'agent_id': self.agent_id, 'extra_context': context or {}}
+        extra = {'object': self.object, 'extra_context': context or {}}
         self.logger.debug(message, extra=extra)
 
     def error(self, message: str, context: Optional[Dict[str, Any]] = None):
         """Registra un mensaje de nivel ERROR."""
 
-        extra = {'agent_id': self.agent_id, 'extra_context': context or {}}
+        extra = {'object': self.object, 'extra_context': context or {}}
         self.logger.error(message, extra=extra)
 
-    def log_transition(self, prev_state: State, next_state: State, reason: str = "Transition"):
+    #logs específicos para los agentes
+
+    def log_agent_transition(self, prev_state: State, next_state: State, reason: str = "Transition"):
         """
         Función clave para loguear transiciones de estado
         """
@@ -111,7 +103,7 @@ class Logger:
         }
         self.info(f"State changed from {prev_state.name} to {next_state.name}", context=context)
 
-    def log_message(self, direction: str, message_type: str, source: str, target: str, payload: Dict):
+    def log_agent_message(self, direction: str, message_type: str, source: str, target: str, payload: Dict):
         """
         Función para loguear mensajes enviados o recibidos 
         """

@@ -24,7 +24,7 @@ class BaseAgent(ABC):
         self.bus = message_bus
         self.state = State.IDLE
         self.context = {}
-        self.logger = Logger(agent_id)
+        self.logger = Logger(agent_id, log_file_name=self.__class__.__name__)
         self.checkpoint = Checkpoints(agent_id)
 
     # --------------------------------------------------------
@@ -82,7 +82,7 @@ class BaseAgent(ABC):
         self.state = new_state
 
         # log de la transición
-        self.logger.log_transition(prev_state, new_state, reason)
+        self.logger.log_agent_transition(prev_state, new_state, reason)
 
         # si es STOPPED o ERROR, save checkpoint
         if new_state in (State.STOPPED, State.ERROR):
