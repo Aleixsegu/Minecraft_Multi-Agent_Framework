@@ -5,7 +5,7 @@ from messages.message_bus import MessageBus
 from utils.logging import Logger
 from typing import Dict, Any, Optional
 import os
-from utils.reflection_get_agents import get_all_agents
+from utils.reflection import get_all_agents
 
 # Regex para analizar comandos como ./<agente> <comando> <parametro>
 COMMAND_PATTERN = re.compile(r"^\./([a-zA-Z]+) ([a-zA-Z]+)(?:\s+(.*))?$")

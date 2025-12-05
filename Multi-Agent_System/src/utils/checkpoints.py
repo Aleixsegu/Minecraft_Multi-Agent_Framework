@@ -20,7 +20,6 @@ class Checkpoints:
         
         self.file_path = self.base_path / f"{self.agent_id}.json"
         self.logger = Logger(self.__class__.__name__)
-        self.logger.info(f"Checkpoints inicializados.")
 
     def save(self, context: Dict[str, Any]):
         """
