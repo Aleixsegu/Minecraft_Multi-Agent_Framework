@@ -50,10 +50,10 @@ class AgentManager:
     async def handle_create_command(self, target_type_str, payload):
         """
         Crea el agente solicitado.
-        target_type_str: 'ExplorerBot', 'MinerBot', etc.
         """
         
-        agent_type = target_type_str
+        # Ahora el MessageParser envía el tipo en el payload
+        agent_type = payload.get("agent_type", target_type_str)
         new_id = payload.get("id") or payload.get("name")
         
         if not new_id:

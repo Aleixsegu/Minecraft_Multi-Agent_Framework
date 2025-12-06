@@ -46,14 +46,76 @@ class BaseAgent(ABC):
         pass
 
     # --------------------------------------------------------
+    # Gestión de Mensajes (Suscripciones y Proceso)
+    # --------------------------------------------------------
+    def setup_subscriptions(self):
+        """
+        Configura las suscripciones a eventos del bus.
+        Las subclases deben llamar a super().setup_subscriptions().
+        """
+        self.bus.register_agent(self.id)
+        
+        # Comandos comunes a todos los agentes
+        common_commands = ["pause", "resume", "stop", "status", "help", "update"]
+        
+        for cmd in common_commands:
+            # 1. Suscripción Directa (command.pause.v1 -> ID)
+            self.bus.subscribe(self.id, f"command.{cmd}.v1")
+            
+            # 2. Suscripción por Tipo (command.ExplorerBot.pause.v1 -> Todos los Explorers)
+            my_type = self.__class__.__name__
+            self.bus.subscribe(self.id, f"command.{my_type}.{cmd}.v1")
+
+    async def process_messages(self):
+        """
+        Procesa mensajes entrantes del bus de forma no bloqueante (polling).
+        """
+        try:
+            # Checkeo rápido de mensajes
+            msg = await asyncio.wait_for(self.bus.receive(self.id), timeout=0.01)
+            
+            if msg:
+                await self._handle_incoming_message(msg)
+
+        except asyncio.TimeoutError:
+            pass 
+        except Exception as e:
+            self.logger.error(f"Error procesando mensajes: {e}")
+
+    async def _handle_incoming_message(self, msg):
+        msg_type = msg.get("type", "")
+        payload = msg.get("payload", {})
+        
+        # Detectar comandos: command.algo.v1
+        if msg_type.startswith("command."):
+            parts = msg_type.split(".")
+            # Formatos: command.pause.v1 OR command.ExplorerBot.pause.v1
+            # Si es broadcast de tipo, el comando está en la 3a posición (index 2)
+            # Si es directo, está en la 2a (index 1)
+            
+            command = "unknown"
+            if len(parts) == 3: # command.pause.v1
+                command = parts[1]
+            elif len(parts) == 4: # command.ExplorerBot.pause.v1
+                command = parts[2]
+                
+            await self.handle_command(command, payload)
+
+    # --------------------------------------------------------
     # Bucle principal
     # --------------------------------------------------------
     async def run(self):
-        """Bucle principal del agente, controlado por el estado FSM."""
+        """Bucle principal del agente."""
+        
+        # Inicializar suscripciones
+        self.setup_subscriptions()
         
         await self.set_state(State.IDLE, reason="initialization")
 
         while self.state != State.STOPPED:
+
+            # 1. Procesar Mensajes (Siempre, incluso en pausa o idle)
+            await self.process_messages()
 
             if self.state == State.PAUSED:
                 await asyncio.sleep(0.2)
@@ -92,22 +154,37 @@ class BaseAgent(ABC):
     # Manejo de comandos
     # --------------------------------------------------------
     async def handle_command(self, command: str, payload=None):
-        """Maneja comandos externos."""
+        """Maneja comandos comunes. Las subclases deben overridear y llamar a super()."""
 
         if command == "pause":
             await self.set_state(State.PAUSED, "paused by command")
+            self.mc.postToChat(f"{self.__class__.__name__} {self.id} pausado")
 
         elif command == "resume":
             self.context = self.checkpoint.load()
             await self.set_state(State.RUNNING, "resumed")
+            self.mc.postToChat(f"{self.__class__.__name__} {self.id} reanudado")
 
         elif command == "stop":
             await self.set_state(State.STOPPED, "stopped by command")
+            self.mc.postToChat(f"{self.__class__.__name__} {self.id} detenido")
 
         elif command == "update":
             if payload:
                 self.context.update(payload)
             await self.set_state(State.RUNNING, "updated configuration")
+            self.mc.postToChat(f"{self.__class__.__name__} {self.id} actualizado")
+            
+        elif command == "status":
+            status_msg = f"Status {self.id}: STATE={self.state.name}"
+            self.logger.info(status_msg)
+            self.mc.postToChat(status_msg)
+            
+        elif command == "help":
+            help_msg = f"Help {self.id}: pause, resume, stop, update, status"
+            self.logger.info(help_msg)
+            self.mc.postToChat(help_msg)
 
         else:
             self.logger.error("unknown_command", context={"command": command})
+

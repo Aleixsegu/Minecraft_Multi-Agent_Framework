@@ -21,7 +21,7 @@ class ExplorerBot(BaseAgent):
         self.map_data = None
 
     async def perceive(self):
-        self.mc.postToChat("ExplorerBot creado")
+        pass
 
     async def decide(self):
         pass
@@ -30,7 +30,49 @@ class ExplorerBot(BaseAgent):
         pass
 
     async def run(self):
-        await super().run()
         self.logger.info("ExplorerBot iniciado")
+        await super().run()
+
+    def setup_subscriptions(self):
+        """Suscripciones específicas del ExplorerBot."""
+
+        super().setup_subscriptions()
         
-       
+        # Comandos específicos: start, set
+        for cmd in ["start", "set"]:
+            self.bus.subscribe(self.id, f"command.{cmd}.v1")
+
+    async def handle_command(self, command: str, payload=None):
+        """Manejo de comandos específicos (start, set) + base."""
+        
+        await super().handle_command(command, payload)
+        payload = payload or {}
+
+        if command == "start":
+            # ./explorer start x=100 z=100 range=50
+            if "x" in payload and "z" in payload:
+                x = payload["x"]
+                z = payload["z"]
+                if "range" in payload:
+                    self.range = payload["range"]
+                
+                msg = f"{self.id}: Start exploración en ({x}, {z}) Rango={self.range}"
+                self.logger.info(msg)
+                self.mc.postToChat(msg)
+                
+                # Actualizar estado y contexto
+                self.context.update({'target_x': x, 'target_z': z, 'range': self.range})
+                await self.set_state(State.RUNNING, "start command")
+            else:
+                self.mc.postToChat(f"{self.id}: Faltan parametros x, z para start.")
+
+        elif command == "set":
+            # ./explorer set range=50
+            if "range" in payload:
+                self.range = payload["range"]
+                msg = f"{self.id}: Rango actualizado a {self.range}"
+                self.logger.info(msg)
+                self.mc.postToChat(msg)
+                self.context['range'] = self.range
+            else:
+                 self.mc.postToChat(f"{self.id}: El comando set requiere 'range'.")

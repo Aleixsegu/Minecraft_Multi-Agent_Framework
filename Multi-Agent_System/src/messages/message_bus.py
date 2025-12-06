@@ -76,20 +76,25 @@ class MessageBus:
         )
 
         # Distribución (Patrón Observer)
+        # Distribución (Patrón Observer vs Point-to-Point)
         recipients_found = 0
         
-        # Distribución basada en TIPO de mensaje
-        if message_type in self._subscriptions:
-            for recipient_id in self._subscriptions[message_type]:
-                await self._deliver(recipient_id, msg)
-                recipients_found += 1
-        
-        # Distribución Punto-a-Punto (Si el mensaje tiene un target explícito)
-        if target_id and target_id in self._queues:
-            # Solo entregar si el target explícito no ha recibido ya por suscripción
-            if not recipients_found or target_id not in self._subscriptions.get(message_type, set()):
+        # CASO 1: UNICAST (Target específico y NO Broadcast)
+        if target_id and target_id != "BROADCAST":
+             # Entrega exclusiva al target
+             if target_id in self._queues:
                  await self._deliver(target_id, msg)
                  recipients_found += 1
+             else:
+                 self.logger.error(f"Target '{target_id}' no encontrado para mensaje unicast.")
+        
+        # CASO 2: BROADCAST (Target es None o "BROADCAST")
+        else:
+             # Entrega a todos los suscritos al TIPO
+             if message_type in self._subscriptions:
+                 for recipient_id in self._subscriptions[message_type]:
+                     await self._deliver(recipient_id, msg)
+                     recipients_found += 1
             
         if recipients_found == 0 and not target_id:
              self.logger.debug(f"Mensaje '{message_type}' publicado pero no tenía receptores suscritos ni un target definido.")

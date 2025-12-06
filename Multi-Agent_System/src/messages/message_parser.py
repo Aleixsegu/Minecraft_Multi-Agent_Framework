@@ -52,13 +52,31 @@ class MessageParser:
             # Análisis de parámetros
             payload = self._parse_chat_params(params_str)
             
-            # Determinación del agente objetivo (ej: "ExplorerBot")
-            target_agent = f"{agent_name.capitalize()}Bot" 
+            # Lógica de Routing actualizada
             
-            self.logger.debug(f"Comando detectado: Agente={target_agent}, Accion={command}, Parametros={payload}")
+            # Caso 1: CREACIÓN -> Target siempre es AgentManager
+            if command.lower() == "create":
+                target_agent = "AgentManager"
+                # Añadimos el tipo de agente al payload para que el Manager sepa qué crear
+                payload["agent_type"] = f"{agent_name.capitalize()}Bot"
+                msg_type = f"command.{command.lower()}.v1"
+
+            # Caso 2: UNICAST -> Si hay un ID explícito en los parámetros (ej: ./explorer pause 1)
+            elif "id" in payload:
+                target_agent = payload["id"]
+                msg_type = f"command.{command.lower()}.v1"
+
+            # Caso 3: BROADCAST por TIPO -> Si NO hay ID (ej: ./explorer pause)
+            else:
+                target_agent = "BROADCAST"
+                # Usamos el canal específico de la clase para el broadcast
+                class_name = f"{agent_name.capitalize()}Bot"
+                msg_type = f"command.{class_name}.{command.lower()}.v1"
+
+            self.logger.debug(f"Comando detectado: Target={target_agent}, Type={msg_type}, Payload={payload}")
 
             # 2. Creación del mensaje estandarizado
-            control_message = self._create_control_message(target_agent=target_agent, command_type=command, payload=payload)
+            control_message = self._create_control_message(target_agent=target_agent, msg_type=msg_type, payload=payload)
             
             # 3. Publicación en el log
             self.logger.log_agent_message(direction="SENT", message_type=control_message['type'], source="USER_CHAT", target=target_agent, payload=control_message['payload'])
@@ -101,12 +119,12 @@ class MessageParser:
 
         return params
 
-    def _create_control_message(self, target_agent: str, command_type: str, payload: Dict) -> Dict[str, Any]:
+    def _create_control_message(self, target_agent: str, msg_type: str, payload: Dict) -> Dict[str, Any]:
         """
-        Ensambla el mensaje JSON estandarizado command.*.v1.
+        Ensambla el mensaje JSON estandarizado.
         """
         return {
-            "type": f"command.{command_type.lower()}.v1",
+            "type": msg_type,
             "source": "USER_CHAT",
             "target": target_agent,
             "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat().replace('+00:00', 'Z'),
