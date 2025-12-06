@@ -55,16 +55,11 @@ class BaseAgent(ABC):
         """
         self.bus.register_agent(self.id)
         
-        # Comandos comunes a todos los agentes
+        # Comandos comunes a todos los agentes (Suscripción GENÉRICA)
         common_commands = ["pause", "resume", "stop", "status", "help", "update"]
         
         for cmd in common_commands:
-            # 1. Suscripción Directa (command.pause.v1 -> ID)
             self.bus.subscribe(self.id, f"command.{cmd}.v1")
-            
-            # 2. Suscripción por Tipo (command.ExplorerBot.pause.v1 -> Todos los Explorers)
-            my_type = self.__class__.__name__
-            self.bus.subscribe(self.id, f"command.{my_type}.{cmd}.v1")
 
     async def process_messages(self):
         """
@@ -86,20 +81,28 @@ class BaseAgent(ABC):
         msg_type = msg.get("type", "")
         payload = msg.get("payload", {})
         
-        # Detectar comandos: command.algo.v1
+        # 1. FILTRADO DE SEGURIDAD (Aunque el Bus ya hace Unicast, verificamos Broadcasts)
+        
+        # A) Check ID (Si el mensaje trae ID específico y no es el mio, lo ignoro)
+        # Esto ocurre si se hace Broadcast de un comando destinado a un ID específico (raro, pero posible)
+        if "id" in payload and str(payload["id"]) != str(self.id):
+             return
+
+        # B) Check TIPO DE AGENTE (Si el mensaje es para 'MinerBot' y yo soy 'ExplorerBot')
+        target_type = payload.get("agent_type")
+        if target_type and target_type != self.__class__.__name__:
+             return
+
+        # 2. PROCESAMIENTO
+        # Detectar comandos: command.algo.v1 (Formato Genérico)
         if msg_type.startswith("command."):
             parts = msg_type.split(".")
-            # Formatos: command.pause.v1 OR command.ExplorerBot.pause.v1
-            # Si es broadcast de tipo, el comando está en la 3a posición (index 2)
-            # Si es directo, está en la 2a (index 1)
             
-            command = "unknown"
             if len(parts) == 3: # command.pause.v1
                 command = parts[1]
-            elif len(parts) == 4: # command.ExplorerBot.pause.v1
-                command = parts[2]
-                
-            await self.handle_command(command, payload)
+                await self.handle_command(command, payload)
+            else:
+                 self.logger.warning(f"Formato de mensaje desconocido: {msg_type}")
 
     # --------------------------------------------------------
     # Bucle principal

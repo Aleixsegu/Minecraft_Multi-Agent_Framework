@@ -1,6 +1,7 @@
 import asyncio
 import time
 from agents.base_agent import BaseAgent
+from agents.state_model import State
 
 
 class ExplorerBot(BaseAgent):
@@ -13,21 +14,19 @@ class ExplorerBot(BaseAgent):
     """
 
     def __init__(self, agent_id, mc, bus):
-        super().__init__(agent_id, mc, bus)     
-        #self.x = mc.player.getTilePos().x       # posición x por defecto
-        #self.z = mc.player.getTilePos().z       # posición z por defecto
-        self.range = 100                        # rango por defecto
-        self.scan_complete = False
-        self.map_data = None
+        super().__init__(agent_id, mc, bus)
+        self.posX = 0
+        self.posZ = 0     
+        self.range = 50                        # rango por defecto
 
     async def perceive(self):
-        pass
+        self.mc.postToChat(f"ExplorerBot {self.id}: En fase de run (percepcion) al haber hecho el comando start")
 
     async def decide(self):
-        pass
+        self.mc.postToChat(f"ExplorerBot {self.id}: En fase de run (decide) al haber hecho el comando start")
 
     async def act(self):
-        pass
+        self.mc.postToChat(f"ExplorerBot {self.id}: En fase de run (actuar) al haber hecho el comando start")
 
     async def run(self):
         self.logger.info("ExplorerBot iniciado")
@@ -35,7 +34,7 @@ class ExplorerBot(BaseAgent):
 
     def setup_subscriptions(self):
         """Suscripciones específicas del ExplorerBot."""
-
+        
         super().setup_subscriptions()
         
         # Comandos específicos: start, set
@@ -44,35 +43,54 @@ class ExplorerBot(BaseAgent):
 
     async def handle_command(self, command: str, payload=None):
         """Manejo de comandos específicos (start, set) + base."""
-        
-        await super().handle_command(command, payload)
         payload = payload or {}
 
+        # 1. Intentar manejar comandos específicos de ExplorerBot
         if command == "start":
-            # ./explorer start x=100 z=100 range=50
+            # ./explorer start <id> [x=.. z=..] [range=..]
+            
+            # 1. Determinar Objetivos (x, z)
             if "x" in payload and "z" in payload:
                 x = payload["x"]
                 z = payload["z"]
-                if "range" in payload:
-                    self.range = payload["range"]
-                
-                msg = f"{self.id}: Start exploración en ({x}, {z}) Rango={self.range}"
-                self.logger.info(msg)
-                self.mc.postToChat(msg)
-                
-                # Actualizar estado y contexto
-                self.context.update({'target_x': x, 'target_z': z, 'range': self.range})
-                await self.set_state(State.RUNNING, "start command")
             else:
-                self.mc.postToChat(f"{self.id}: Faltan parametros x, z para start.")
+                # Si no se dan coordenadas, usar la posición del jugador
+                try:
+                    pos = self.mc.player.getTilePos()
+                    self.posX = pos.x
+                    self.posZ = pos.z
+                except Exception as e:
+                    self.logger.error(f"Error obteniendo posición del jugador: {e}")
+                    self.posX = 0
+                    self.posZ = 0
+
+            # 2. Determinar Rango (opcional)
+            if "range" in payload:
+                self.range = payload["range"]
+
+            # 3. Ejecutar
+            msg = f"{self.id}: Iniciando exploracion en ({x}, {z}) con Rango={self.range}"
+            self.logger.info(msg)
+            self.mc.postToChat(msg)
+            
+            # Actualizar estado y contexto
+            self.context.update({'target_x': x, 'target_z': z, 'range': self.range})
+            await self.set_state(State.RUNNING, "start command")
+            
+            return
 
         elif command == "set":
             # ./explorer set range=50
             if "range" in payload:
                 self.range = payload["range"]
+                
                 msg = f"{self.id}: Rango actualizado a {self.range}"
                 self.logger.info(msg)
                 self.mc.postToChat(msg)
                 self.context['range'] = self.range
             else:
-                 self.mc.postToChat(f"{self.id}: El comando set requiere 'range'.")
+                self.mc.postToChat(f"{self.id}: El comando set requiere 'range'.")
+            return
+
+        # 2. Si no es específico, delegar al BaseAgent
+        await super().handle_command(command, payload)

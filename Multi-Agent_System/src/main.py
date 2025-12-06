@@ -1,8 +1,6 @@
 from asyncio.tasks import gather
 import asyncio
 import importlib
-import importlib.util
-import inspect
 import sys
 import os
 
@@ -44,6 +42,51 @@ def register_agents(factory, agents_dir):
         factory.register_agent_class(name, cls)
 
 # ---------------------------------------------------------------------
+# MENSAJES CHAT DE PRUEBA
+# ---------------------------------------------------------------------
+# ---------------------------------------------------------------------
+# MENSAJES CHAT DE PRUEBA
+# ---------------------------------------------------------------------
+async def chat_messages(mc, parser):
+    
+    tiempo = 0.5
+    
+    print("[TEST] --- Iniciando secuencia de prueba ---")
+    await asyncio.sleep(tiempo) 
+
+    mc.postToChat("[TEST] > ./explorer create 1")
+    await parser.process_chat_message("./explorer create 1")
+    await asyncio.sleep(tiempo)
+
+    mc.postToChat("[TEST] > ./explorer create 2")
+    await parser.process_chat_message("./explorer create 2")
+    await asyncio.sleep(tiempo)
+
+    mc.postToChat("[TEST] > ./explorer status (Broadcast)")
+    await parser.process_chat_message("./explorer status")
+    await asyncio.sleep(tiempo)
+
+    mc.postToChat("[TEST] > ./explorer pause 1 (Unicast a ID 1)")
+    await parser.process_chat_message("./explorer pause 1")
+    await asyncio.sleep(tiempo)
+    
+    mc.postToChat("[TEST] > ./explorer set range 500")
+    await parser.process_chat_message("./explorer set range 500")
+    await asyncio.sleep(tiempo)
+    
+    mc.postToChat("[TEST] > ./explorer set range 1 10")
+    await parser.process_chat_message("./explorer set range 1 10")
+    await asyncio.sleep(tiempo)
+
+    mc.postToChat("[TEST] > ./explorer start 1 x=0 z=0 range=10")
+    await parser.process_chat_message("./explorer start 1 x=0 z=0 range=10")
+    await asyncio.sleep(tiempo)
+
+
+
+    print("[TEST] --- Fin secuencia de prueba ---")
+
+# ---------------------------------------------------------------------
 # LÓGICA PRINCIPAL
 # ---------------------------------------------------------------------
 
@@ -71,6 +114,8 @@ async def main():
     manager = AgentManager(mc, message_bus)
     asyncio.create_task(manager.run())
     
+    asyncio.create_task(chat_messages(mc, parser))
+
     while True:
         await asyncio.sleep(1)
 

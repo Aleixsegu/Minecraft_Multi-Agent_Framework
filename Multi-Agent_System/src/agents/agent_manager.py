@@ -22,7 +22,6 @@ class AgentManager:
 
         self.bus.register_agent(self.__class__.__name__)
         self.bus.subscribe(self.__class__.__name__, "command.create.v1")
-        self.logger.info("AgentManager suscrito a command.create.v1")
 
     async def run(self):
         """Bucle principal de escucha."""

@@ -54,11 +54,13 @@ class MessageParser:
             
             # Lógica de Routing actualizada
             
+            # Siempre añadimos el tipo de agente al payload para el filtrado en el receptor
+            class_name = f"{agent_name.capitalize()}Bot"
+            payload["agent_type"] = class_name
+            
             # Caso 1: CREACIÓN -> Target siempre es AgentManager
             if command.lower() == "create":
                 target_agent = "AgentManager"
-                # Añadimos el tipo de agente al payload para que el Manager sepa qué crear
-                payload["agent_type"] = f"{agent_name.capitalize()}Bot"
                 msg_type = f"command.{command.lower()}.v1"
 
             # Caso 2: UNICAST -> Si hay un ID explícito en los parámetros (ej: ./explorer pause 1)
@@ -66,12 +68,12 @@ class MessageParser:
                 target_agent = payload["id"]
                 msg_type = f"command.{command.lower()}.v1"
 
-            # Caso 3: BROADCAST por TIPO -> Si NO hay ID (ej: ./explorer pause)
+            # Caso 3: BROADCAST GENÉRICO -> Si NO hay ID (ej: ./explorer pause)
+            # Ya no usamos command.ExplorerBot.pause.v1, sino command.pause.v1
+            # El agente filtrará usando payload['agent_type']
             else:
                 target_agent = "BROADCAST"
-                # Usamos el canal específico de la clase para el broadcast
-                class_name = f"{agent_name.capitalize()}Bot"
-                msg_type = f"command.{class_name}.{command.lower()}.v1"
+                msg_type = f"command.{command.lower()}.v1"
 
             self.logger.debug(f"Comando detectado: Target={target_agent}, Type={msg_type}, Payload={payload}")
 
@@ -106,17 +108,69 @@ class MessageParser:
             except ValueError:
                 params[key] = value_str.strip()
 
-        # 2. Buscar si hay una palabra "suelta" al principio que NO es key=value
-        # Esto es para casos como: ./explorer create MyBot
-        # Dividimos string y vemos el primer token
+        # 2. Buscar palabras sueltas para casos especiales
+        # a) Casos como "./explorer create MyBot" -> ID=MyBot
+        # b) Casos como "./explorer set range 50" (el usuario no puso =)
+        # c) Casos como "./explorer set range 1 50" (ID=1, range=50 o viceversa)
+        
         tokens = param_str.split()
-        if tokens:
-            first = tokens[0]
-            if "=" not in first:
-                # Asumimos que es el ID o Nombre
-                params["id"] = first
-                params["name"] = first 
+        
+        tokens = param_str.split()
+        
+        # Lógica especial para 'range' posicional para resolver ambigüedad
+        # ./explorer set range 1 10  (ID=1, Range=10) vs ./explorer set range 10 (Range=10)
+        if "range" in tokens:
+            idx = tokens.index("range")
+            # Cuantos tokens quedan después de 'range'
+            remaining = len(tokens) - (idx + 1)
+            
+            if remaining >= 2:
+                # Asumimos formato: range <ID> <VALOR>
+                # El token en idx+1 es el ID
+                val_id = tokens[idx+1]
+                if "=" not in val_id:
+                     params["id"] = val_id
+                     params["name"] = val_id
+                
+                # El token en idx+2 es el VALOR
+                val_range = tokens[idx+2]
+                try:
+                    params["range"] = int(val_range)
+                except ValueError:
+                    params["range"] = val_range
+                
+                # Consumimos 'range', id y valor para que no molesten en el bucle general
+                tokens.pop(idx+2)
+                tokens.pop(idx+1)
+                tokens.pop(idx)
+                
+            elif remaining == 1:
+                # Asumimos formato: range <VALOR>
+                val_range = tokens[idx+1]
+                try:
+                    params["range"] = int(val_range)
+                except ValueError:
+                    params["range"] = val_range
+                    
+                tokens.pop(idx+1)
+                tokens.pop(idx)
 
+        # Bucle genérico para lo que quede
+        i = 0
+        while i < len(tokens):
+            token = tokens[i]
+            
+            if "=" in token: # Ya procesado por regex
+                i += 1
+                continue
+            
+            # Si es un ID suelto que ha sobrevivido (ej: ./explorer set 1 range=50)
+            if "id" not in params:
+                 params["id"] = token
+                 params["name"] = token
+            
+            i += 1
+            
         return params
 
     def _create_control_message(self, target_agent: str, msg_type: str, payload: Dict) -> Dict[str, Any]:
