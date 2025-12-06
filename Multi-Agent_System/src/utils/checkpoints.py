@@ -6,6 +6,17 @@ from utils.logging import Logger
 
 CHECKPOINTS_DIR = Path(__file__).resolve().parent.parent.parent / "checkpoints"
 
+def clear_prev_checkpoints():
+    """
+    Elimina todos los archivos de checkpoints en el directorio de checkpoints.
+    """
+
+    if os.path.exists(CHECKPOINTS_DIR):
+        for filename in os.listdir(CHECKPOINTS_DIR):
+            file_path = os.path.join(CHECKPOINTS_DIR, filename)
+            if os.path.isfile(file_path):
+                os.unlink(file_path)
+
 class Checkpoints:
     """
     Clase para gestionar el guardado y carga de estados de los agentes (Checkpoints).

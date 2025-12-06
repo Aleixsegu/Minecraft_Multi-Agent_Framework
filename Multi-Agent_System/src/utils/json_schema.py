@@ -60,14 +60,14 @@ def validate_message(msg: dict):
         raise SchemaError("El campo 'payload' debe ser un diccionario.")
 
     # status
-    valid_status = {"SUCCESS", "ERROR", "RUNNING", "PROCESSING", "WAITING"}
+    valid_status = {"SUCCESS", "ERROR", "RUNNING", "PROCESSING", "WAITING", "INITIATED"}
 
     if not isinstance(msg["status"], str):
         raise SchemaError("El campo 'status' debe ser una cadena.")
 
     if msg["status"] not in valid_status:
         raise SchemaError(
-            f"El campo 'status' debe ser una cadena.")
+            f"Valor de 'status' inválido: {msg['status']}. Esperado: {valid_status}")
 
     # context (opcional)
     if "context" in msg and not isinstance(msg["context"], dict):

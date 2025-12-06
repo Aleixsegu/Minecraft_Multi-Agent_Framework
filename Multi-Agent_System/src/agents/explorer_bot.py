@@ -1,6 +1,6 @@
 import asyncio
 import time
-from agents.BaseAgent import BaseAgent
+from agents.base_agent import BaseAgent
 
 
 class ExplorerBot(BaseAgent):

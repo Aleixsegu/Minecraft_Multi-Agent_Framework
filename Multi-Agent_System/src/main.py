@@ -9,10 +9,13 @@ import os
 from mcpi.minecraft import Minecraft
 from messages.message_bus import MessageBus
 from messages.message_parser import MessageParser
-from agents.BaseAgent import BaseAgent
-from agents.AgentFactory import AgentFactory
+from agents.base_agent import BaseAgent
+from agents.agent_factory import AgentFactory
 from messages.chat_listener import ChatListener
 from utils.reflection import get_all_agents
+from agents.agent_manager import AgentManager
+from utils.logging import clear_prev_logs
+from utils.checkpoints import clear_prev_checkpoints
 
 # ---------------------------------------------------------------------
 # Lanza el mundo de Minecraft
@@ -46,6 +49,10 @@ def register_agents(factory, agents_dir):
 
 async def main():
 
+    # Limpiar logs y checkpoints anteriores
+    clear_prev_logs()
+    clear_prev_checkpoints()
+    
     # Crear el sistema
     mc = init_mc()
 
@@ -59,6 +66,13 @@ async def main():
     factory = AgentFactory()
 
     register_agents(factory, os.path.join(os.path.dirname(os.path.abspath(__file__)), "agents"))
+
+    # Iniciar el AgentManager para gestionar la creación de agentes
+    manager = AgentManager(mc, message_bus)
+    asyncio.create_task(manager.run())
+    
+    while True:
+        await asyncio.sleep(1)
 
 # ---------------------------------------------------------------------
 # EJECUCIÓN

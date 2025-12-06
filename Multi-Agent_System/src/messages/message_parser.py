@@ -25,10 +25,9 @@ class MessageParser:
         # Cargar dinámicamente los tipos de agentes válidos
         agents_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "agents")
         self.valid_agents = set(name.lower().replace('bot', '') for name in get_all_agents(agents_dir).keys())
-        self.valid_agents.add("agent")
         self.valid_agents.add("workflow")
         
-        self.logger.info(f"MessageParser inicializado. Comandos validos: {self.valid_agents}")
+        self.logger.info(f"MessageParser inicializado.")
 
     async def process_chat_message(self, command_str: str):
         """
@@ -73,21 +72,33 @@ class MessageParser:
     def _parse_chat_params(self, param_str: Optional[str]) -> Dict[str, Any]:
         """
         Convierte una cadena de parámetros 'key=value key2=value2' en un diccionario.
-        Intenta convertir valores a enteros si es posible.
+        Si hay un primer argumento posicional sin clave, lo asigna a 'name' (o 'id').
         """
         if not param_str:
             return {}
         
         params = {}
+        
+        # 1. Extraer key=value pairs
         for match in PARAM_PATTERN.finditer(param_str):
             key = match.group(1)
             value_str = match.group(2)
-            
-            # Convertir el valor a int
             try:
                 params[key] = int(value_str)
             except ValueError:
                 params[key] = value_str.strip()
+
+        # 2. Buscar si hay una palabra "suelta" al principio que NO es key=value
+        # Esto es para casos como: ./explorer create MyBot
+        # Dividimos string y vemos el primer token
+        tokens = param_str.split()
+        if tokens:
+            first = tokens[0]
+            if "=" not in first:
+                # Asumimos que es el ID o Nombre
+                params["id"] = first
+                params["name"] = first 
+
         return params
 
     def _create_control_message(self, target_agent: str, command_type: str, payload: Dict) -> Dict[str, Any]:

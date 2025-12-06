@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import MagicMock
-from agents.AgentFactory import AgentFactory
-from agents.BaseAgent import BaseAgent
+from agents.agent_factory import AgentFactory
+from agents.base_agent import BaseAgent
 
 # Mock concreto para usar en los tests
 class MockAgent(BaseAgent):

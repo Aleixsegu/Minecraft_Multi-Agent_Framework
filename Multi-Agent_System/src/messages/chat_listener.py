@@ -17,6 +17,7 @@ class ChatListener:
         
         self.parser = message_parser
         self.logger = Logger(self.__class__.__name__)
+        self.logger.info("ChatListener inicializado.")
         self.is_running = True
         self.mc = mc
 
@@ -25,8 +26,6 @@ class ChatListener:
         Bucle asíncrono que sondea (poll) el chat de Minecraft de forma no bloqueante.
         Este es el bucle de "espera" continua.
         """
-
-        self.logger.info("ChatListener iniciado.")
         
         while self.is_running:
             try:

@@ -1,10 +1,10 @@
 import asyncio
 import time
-from agents.BaseAgent import BaseAgent
+from agents.base_agent import BaseAgent
 
 
 
-class BuilderBot(BaseAgent):
+class MinerBot(BaseAgent):
  
     def __init__(self, agent_id,mc,  bus):
         super().__init__(agent_id, mc, bus)     
@@ -22,4 +22,4 @@ class BuilderBot(BaseAgent):
         pass
 
     async def run(self):
-       self.logger.info("BuilderBot iniciado")
+       self.logger.info("MinerBot iniciado")

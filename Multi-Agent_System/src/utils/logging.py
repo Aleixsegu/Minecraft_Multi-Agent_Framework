@@ -9,15 +9,27 @@ from agents.state_model import State
 from pathlib import Path
 LOGS_DIR = Path(__file__).resolve().parent.parent.parent / "logs"
 
+def clear_prev_logs():
+    """
+    Elimina todos los archivos de log en el directorio de logs.
+    """
+
+    if os.path.exists(LOGS_DIR):
+        for filename in os.listdir(LOGS_DIR):
+            file_path = os.path.join(LOGS_DIR, filename)
+            if os.path.isfile(file_path):
+                os.unlink(file_path)
 
 class Json_log_formatter(logging.Formatter):
     """
     Formateador personalizado para transformar los registros de log en JSON.
     """
+
     def format(self, record: logging.LogRecord) -> str:
         """
         Transforma el LogRecord en una cadena JSON.
         """
+
         # Creación del diccionario base
         log_data: Dict[str, Any] = {
             "timestamp": datetime.datetime.fromtimestamp(record.created, tz=datetime.timezone.utc).isoformat().replace('+00:00', 'Z'),
@@ -42,6 +54,7 @@ class Logger:
     """
     Clase de interfaz simple para que los agentes realicen logs estructurados.
     """
+
     def __init__(self, object: str, log_file_name: str = None, level=logging.DEBUG):
         """
         Inicializa el logger para un agente específico.

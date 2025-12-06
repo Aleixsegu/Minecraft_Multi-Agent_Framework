@@ -1,5 +1,5 @@
 import inspect
-from agents.BaseAgent import BaseAgent
+from agents.base_agent import BaseAgent
 
 class AgentFactory:
     """

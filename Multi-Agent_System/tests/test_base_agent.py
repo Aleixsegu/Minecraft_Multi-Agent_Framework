@@ -1,7 +1,7 @@
 import pytest
 import asyncio
 from unittest.mock import MagicMock, AsyncMock, patch
-from agents.BaseAgent import BaseAgent
+from agents.base_agent import BaseAgent
 from agents.state_model import State
 
 # Implementación concreta para probar BaseAgent
@@ -28,8 +28,8 @@ def agent(mock_deps):
     # Usamos spec=False para que MockLogger acepte cualquier llamada, 
     # ya que si usamos spec=Logger real, tendríamos que importar la clase real
     # y si esta cambia, el test falla. MagicMock por defecto acepta todo.
-    with patch("agents.BaseAgent.Checkpoints") as MockCheckpoints, \
-         patch("agents.BaseAgent.Logger") as MockLoggerClass:
+    with patch("agents.base_agent.Checkpoints") as MockCheckpoints, \
+         patch("agents.base_agent.Logger") as MockLoggerClass:
         
         MockCheckpoints.return_value.load.return_value = {}
         

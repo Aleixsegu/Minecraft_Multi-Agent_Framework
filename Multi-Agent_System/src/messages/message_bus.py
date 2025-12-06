@@ -67,7 +67,7 @@ class MessageBus:
         target_id = msg.get('target')
         
         # Log de envío del mensaje
-        self.logger.log_message(
+        self.logger.log_agent_message(
             direction="SENT",
             message_type=message_type,
             source=source_id,
@@ -125,7 +125,7 @@ class MessageBus:
         source = msg.get('source', 'SYSTEM') 
         message_type = msg.get('type', 'unknown.v1')
 
-        self.logger.log_message(
+        self.logger.log_agent_message(
             direction="RECEIVED", 
             message_type=message_type, 
             source=source, 
