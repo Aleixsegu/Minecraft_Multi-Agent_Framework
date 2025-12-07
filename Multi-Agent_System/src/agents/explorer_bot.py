@@ -1,5 +1,3 @@
-import asyncio
-import time
 from agents.base_agent import BaseAgent
 from agents.state_model import State
 
@@ -20,13 +18,16 @@ class ExplorerBot(BaseAgent):
         self.range = 50                        # rango por defecto
 
     async def perceive(self):
-        self.mc.postToChat(f"ExplorerBot {self.id}: En fase de run (percepcion) al haber hecho el comando start")
+        #self.mc.postToChat(f"ExplorerBot {self.id}: En fase de run (percepcion) al haber hecho el comando start")
+        pass
 
     async def decide(self):
-        self.mc.postToChat(f"ExplorerBot {self.id}: En fase de run (decide) al haber hecho el comando start")
+        #self.mc.postToChat(f"ExplorerBot {self.id}: En fase de run (decide) al haber hecho el comando start")
+        pass
 
     async def act(self):
-        self.mc.postToChat(f"ExplorerBot {self.id}: En fase de run (actuar) al haber hecho el comando start")
+        #self.mc.postToChat(f"ExplorerBot {self.id}: En fase de run (actuar) al haber hecho el comando start")
+        pass
 
     async def run(self):
         self.logger.info("ExplorerBot iniciado")

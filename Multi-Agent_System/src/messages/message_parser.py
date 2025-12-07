@@ -155,6 +155,34 @@ class MessageParser:
                 tokens.pop(idx+1)
                 tokens.pop(idx)
 
+        # Lógica especial para 'strategy' posicional
+        # ./miner set strategy vertical
+        # ./miner set strategy 1 vertical
+        if "strategy" in tokens:
+            idx = tokens.index("strategy")
+            remaining = len(tokens) - (idx + 1)
+            
+            if remaining >= 2:
+                # strategy <ID> <VALOR>
+                val_id = tokens[idx+1]
+                if "=" not in val_id and "id" not in params:
+                     params["id"] = val_id
+                     params["name"] = val_id
+                
+                val_strat = tokens[idx+2]
+                params["strategy"] = val_strat
+                
+                tokens.pop(idx+2)
+                tokens.pop(idx+1)
+                tokens.pop(idx)
+            
+            elif remaining == 1:
+                # strategy <VALOR>
+                val_strat = tokens[idx+1]
+                params["strategy"] = val_strat
+                tokens.pop(idx+1)
+                tokens.pop(idx)
+
         # Bucle genérico para lo que quede
         i = 0
         while i < len(tokens):
