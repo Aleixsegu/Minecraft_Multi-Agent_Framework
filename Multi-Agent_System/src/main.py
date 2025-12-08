@@ -10,7 +10,7 @@ from messages.message_parser import MessageParser
 from agents.base_agent import BaseAgent
 from agents.agent_factory import AgentFactory
 from messages.chat_listener import ChatListener
-from utils.reflection import get_all_agents, get_all_strategies
+from utils.reflection import get_all_agents, get_all_strategies, get_all_structures
 from agents.agent_manager import AgentManager
 from utils.logging import clear_prev_logs
 from utils.checkpoints import clear_prev_checkpoints
@@ -164,12 +164,47 @@ async def chat_messages(mc, parser):
         await parser.process_chat_message("./miner fulfill 1")
         await asyncio.sleep(tiempo)
 
+    async def builder_sequence():
+
+        mc.postToChat("============================")
+        mc.postToChat("-----TEST DE BUILDERBOT-----")
+        mc.postToChat("============================")
+
+        mc.postToChat("[TEST] > ./builder create 1")
+        await parser.process_chat_message("./builder create 1")
+        await asyncio.sleep(tiempo)
+
+        mc.postToChat("[TEST] > ./builder create 2")
+        await parser.process_chat_message("./builder create 2")
+        await asyncio.sleep(tiempo)
+
+        mc.postToChat("[TEST] > ./builder plan list")
+        await parser.process_chat_message("./builder plan list")
+        await asyncio.sleep(tiempo)
+
+        mc.postToChat("[TEST] > ./builder plan set 1 SimpleHouse")
+        await parser.process_chat_message("./builder plan set 1 SimpleHouse")
+        await asyncio.sleep(tiempo)
+
+        mc.postToChat("[TEST] > ./builder plan set SimpleHouse")
+        await parser.process_chat_message("./builder plan set SimpleHouse")
+        await asyncio.sleep(tiempo)
+
+        mc.postToChat("[TEST] > ./builder bom 1")
+        await parser.process_chat_message("./builder bom 1")
+        await asyncio.sleep(tiempo)
+
+        mc.postToChat("[TEST] > ./builder build 1")
+        await parser.process_chat_message("./builder build 1")
+        await asyncio.sleep(tiempo)
+
     print("[TEST] --- Iniciando secuencia de prueba ---")
     await asyncio.sleep(tiempo) 
 
     #await global_sequence()
     #await explorer_sequence()
-    await miner_sequence()
+    #await miner_sequence()
+    await builder_sequence()
 
     print("[TEST] --- Fin secuencia de prueba ---")
 
