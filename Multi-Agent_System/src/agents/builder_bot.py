@@ -97,12 +97,10 @@ class BuilderBot(BaseAgent):
             structures = get_all_structures(STRUCTURES_DIR)
             if plan_name in structures:
                 try:
-                    structure_class = structures[plan_name]
-                    # Asumimos que se instancia para obtener datos
-                    instance = structure_class()
+                    structure = structures[plan_name]
                     
-                    if hasattr(instance, 'get_bom'):
-                        bom = instance.get_bom()
+                    if hasattr(structure, 'get_bom'):
+                        bom = structure.get_bom()
                         msg = f"{self.id} BOM for {plan_name}: {bom}"
                         self.mc.postToChat(msg)
                         self.logger.info(msg)

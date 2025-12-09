@@ -1,0 +1,6 @@
+1- schematics que funcionen bien [mas o menos, falta probar mas]
+2- poner comentarios para entender bien
+3- ver lo de cola de multiprocesos
+4- ver el envío de mensajes entre bots
+5- hacer funciones de bots
+6- checkpoints que funcionen y serializables

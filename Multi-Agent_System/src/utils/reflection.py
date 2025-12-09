@@ -54,34 +54,27 @@ def get_all_strategies(strategies_dir):
                     found_strategies[obj.__name__] = obj
     return found_strategies
 
+from utils.schematic_parser import SchematicParser
+
 def get_all_structures(structures_dir):
     """
-    Escanea el directorio dado (ej: 'builder_structures/') para encontrar e importar clases de estructuras.
-    Al no tener clase base, se importan todas las clases definidas en el módulo.
-    Devuelve un diccionario {nombre_clase: objeto_clase}.
+    Escanea el directorio dado (ej: 'builder_structures/') para encontrar archivos .schem.
+    Utiliza SchematicTranslator para cargarlos.
+    Devuelve un diccionario {nombre_estructura: objeto_translator}.
     """
     found_structures = {}
     if not os.path.exists(structures_dir):
         return found_structures
 
     for filename in os.listdir(structures_dir):
-        # Filtra archivos Python válidos
-        if filename.endswith('.py') and filename not in ('__init__.py',):
-            module_name = filename[:-3] # Quita la extensión .py
-            module_path = os.path.join(structures_dir, filename)
-
-            # Usa importlib para cargar el módulo dinámicamente
-            spec = importlib.util.spec_from_file_location(module_name, module_path)
-            if spec and spec.loader:
-                try:
-                    module = importlib.util.module_from_spec(spec)
-                    spec.loader.exec_module(module)
-
-                    # Inspecciona los miembros del módulo en busca de clases
-                    for name, obj in inspect.getmembers(module):
-                        # Comprueba si es una clase y si está definida en este módulo (no importada)
-                        if inspect.isclass(obj) and obj.__module__ == module_name:
-                            found_structures[obj.__name__] = obj
-                except Exception as e:
-                    print(f"Error loading structure {filename}: {e}")
+        # Filtra archivos .schem
+        if filename.endswith('.schem'):
+            name = filename[:-6] # Quita la extensión .schem
+            path = os.path.join(structures_dir, filename)
+            
+            try:
+                parser = SchematicParser(path)
+                found_structures[name] = parser
+            except Exception as e:
+                print(f"Error loading structure {filename}: {e}")
     return found_structures

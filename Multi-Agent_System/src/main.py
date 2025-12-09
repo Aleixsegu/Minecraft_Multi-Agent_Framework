@@ -182,12 +182,12 @@ async def chat_messages(mc, parser):
         await parser.process_chat_message("./builder plan list")
         await asyncio.sleep(tiempo)
 
-        mc.postToChat("[TEST] > ./builder plan set 1 SimpleHouse")
-        await parser.process_chat_message("./builder plan set 1 SimpleHouse")
+        mc.postToChat("[TEST] > ./builder plan set 1 villagehouse1")
+        await parser.process_chat_message("./builder plan set 1 villagehouse1")
         await asyncio.sleep(tiempo)
 
-        mc.postToChat("[TEST] > ./builder plan set SimpleHouse")
-        await parser.process_chat_message("./builder plan set SimpleHouse")
+        mc.postToChat("[TEST] > ./builder plan set villagehouse1")
+        await parser.process_chat_message("./builder plan set villagehouse1")
         await asyncio.sleep(tiempo)
 
         mc.postToChat("[TEST] > ./builder bom 1")
