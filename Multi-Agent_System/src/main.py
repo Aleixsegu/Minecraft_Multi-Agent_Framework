@@ -202,9 +202,9 @@ async def chat_messages(mc, parser):
     await asyncio.sleep(tiempo) 
 
     #await global_sequence()
-    #await explorer_sequence()
+    await explorer_sequence()
     #await miner_sequence()
-    await builder_sequence()
+    #await builder_sequence()
 
     print("[TEST] --- Fin secuencia de prueba ---")
 

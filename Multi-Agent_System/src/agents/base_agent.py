@@ -4,8 +4,6 @@ from abc import ABC, abstractmethod
 from agents.state_model import State
 from utils.logging import Logger
 from utils.checkpoints import Checkpoints
-
-
 class BaseAgent(ABC):
     """
     Clase base para todos los agentes.
@@ -17,7 +15,6 @@ class BaseAgent(ABC):
     - Checkpointing para recuperación
     - Ejecución asíncrona
     """
-
     def __init__(self, agent_id: str, mc, message_bus):
         self.mc = mc
         self.id = agent_id
@@ -26,7 +23,6 @@ class BaseAgent(ABC):
         self.context = {}
         self.logger = Logger(agent_id, log_file_name=self.__class__.__name__)
         self.checkpoint = Checkpoints(agent_id)
-
     # --------------------------------------------------------
     # Métodos abstractos PDA
     # --------------------------------------------------------
@@ -34,17 +30,14 @@ class BaseAgent(ABC):
     async def perceive(self):
         """Lee el entorno o mensajes entrantes."""
         pass
-
     @abstractmethod
     async def decide(self):
         """Computa la próxima acción basada en la percepción."""
         pass    
-
     @abstractmethod
     async def act(self):
         """Ejecuta la acción seleccionada."""
         pass
-
     # --------------------------------------------------------
     # Gestión de Mensajes (Suscripciones y Proceso)
     # --------------------------------------------------------
@@ -60,24 +53,7 @@ class BaseAgent(ABC):
         
         for cmd in common_commands:
             self.bus.subscribe(self.id, f"command.{cmd}.v1")
-
-    async def process_messages(self):
-        """
-        Procesa mensajes entrantes del bus de forma no bloqueante (polling).
-        """
-        try:
-            # Checkeo rápido de mensajes
-            msg = await asyncio.wait_for(self.bus.receive(self.id), timeout=0.01)
-            
-            if msg:
-                await self._handle_incoming_message(msg)
-
-        except asyncio.TimeoutError:
-            pass 
-        except Exception as e:
-            self.logger.error(f"Error procesando mensajes: {e}")
-
-    async def _handle_incoming_message(self, msg):
+    async def handle_incoming_message(self, msg):
         msg_type = msg.get("type", "")
         payload = msg.get("payload", {})
         
@@ -87,12 +63,10 @@ class BaseAgent(ABC):
         # Esto ocurre si se hace Broadcast de un comando destinado a un ID específico (raro, pero posible)
         if "id" in payload and str(payload["id"]) != str(self.id):
              return
-
         # B) Check TIPO DE AGENTE (Si el mensaje es para 'MinerBot' y yo soy 'ExplorerBot')
         target_type = payload.get("agent_type")
         if target_type and target_type != self.__class__.__name__:
              return
-
         # 2. PROCESAMIENTO
         # Detectar comandos: command.algo.v1 (Formato Genérico)
         if msg_type.startswith("command."):
@@ -103,7 +77,6 @@ class BaseAgent(ABC):
                 await self.handle_command(command, payload)
             else:
                  self.logger.warning(f"Formato de mensaje desconocido: {msg_type}")
-
     # --------------------------------------------------------
     # Bucle principal
     # --------------------------------------------------------
@@ -114,30 +87,24 @@ class BaseAgent(ABC):
         self.setup_subscriptions()
         
         await self.set_state(State.IDLE, reason="initialization")
-
         while self.state != State.STOPPED:
-
-            # 1. Procesar Mensajes (Siempre, incluso en pausa o idle)
-            await self.process_messages()
-
+            # 1. Perceive: Incluye recibir mensajes en todos los estados
+            await self.perceive()
             if self.state == State.PAUSED:
                 await asyncio.sleep(0.2)
                 continue
-
             if self.state == State.IDLE:
                 await asyncio.sleep(0.1)
                 continue
-
             if self.state == State.RUNNING:
                 try:
-                    await self.perceive()
+                    # Perceive ya fue llamado arriba
                     await self.decide()
                     await self.act()
                 except Exception as e:
+                    self.logger.error(f"Error en ciclo PDA: {e}")
                     await self.set_state(State.ERROR, reason=str(e))
-
             await asyncio.sleep(0) 
-
     # --------------------------------------------------------
     # Máquina de estados
     # --------------------------------------------------------
@@ -145,33 +112,26 @@ class BaseAgent(ABC):
         """Cambia el estado del agente."""
         prev_state = self.state
         self.state = new_state
-
         # log de la transición
         self.logger.log_agent_transition(prev_state, new_state, reason)
-
         # si es STOPPED o ERROR, save checkpoint
         if new_state in (State.STOPPED, State.ERROR):
             self.checkpoint.save(self.context)
-
     # --------------------------------------------------------
     # Manejo de comandos
     # --------------------------------------------------------
     async def handle_command(self, command: str, payload=None):
         """Maneja comandos comunes. Las subclases deben overridear y llamar a super()."""
-
         if command == "pause":
             await self.set_state(State.PAUSED, "paused by command")
             self.mc.postToChat(f"{self.__class__.__name__} {self.id} pausado")
-
         elif command == "resume":
             self.context = self.checkpoint.load()
             await self.set_state(State.RUNNING, "resumed")
             self.mc.postToChat(f"{self.__class__.__name__} {self.id} reanudado")
-
         elif command == "stop":
             await self.set_state(State.STOPPED, "stopped by command")
             self.mc.postToChat(f"{self.__class__.__name__} {self.id} detenido")
-
         elif command == "update":
             if payload:
                 self.context.update(payload)
@@ -187,7 +147,5 @@ class BaseAgent(ABC):
             help_msg = f"Help {self.id}: pause, resume, stop, update, status"
             self.logger.info(help_msg)
             self.mc.postToChat(help_msg)
-
         else:
             self.logger.error("unknown_command", context={"command": command})
-
