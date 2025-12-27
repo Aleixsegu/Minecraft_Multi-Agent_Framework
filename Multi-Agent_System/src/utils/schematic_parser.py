@@ -109,6 +109,12 @@ class SchematicParser:
         self.filepath = filepath
         self.data = self._load()
         self.blocks_cache = None
+        
+        # Dimensions
+        self.width = 0
+        self.height = 0
+        self.length = 0
+        self._parse_dimensions()
 
     def _load(self):
         try:
@@ -117,6 +123,15 @@ class SchematicParser:
         except Exception as e:
             print(f"Error loading {self.filepath}: {e}")
             return {}
+
+    def _parse_dimensions(self):
+        root = self.data
+        if 'Schematic' in root:
+            root = root['Schematic']
+            
+        self.width = root.get('Width', 0)
+        self.height = root.get('Height', 0)
+        self.length = root.get('Length', 0)
 
     def decode_block_data(self, byte_array):
         data = []
@@ -145,9 +160,10 @@ class SchematicParser:
         if 'Schematic' in root:
             root = root['Schematic']
 
-        width = root.get('Width', 0)
-        height = root.get('Height', 0)
-        length = root.get('Length', 0)
+        # Use stored dimensions
+        width = self.width
+        height = self.height
+        length = self.length
 
         # Handle different structures
         palette = {}
