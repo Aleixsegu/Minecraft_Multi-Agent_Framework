@@ -203,289 +203,104 @@ class ExplorerBot(BaseAgent):
             
             asyncio.create_task(cleanup_fn(coord_list, vis_y))
 
+    # --------------------------------------------------------------------------
+    # CHECKPOINT SERIALIZATION HELPERS
+    # --------------------------------------------------------------------------
+    def _load_scan_state(self):
+        """Deserializes scanning state from self.context."""
+        data = self.context.get('scan_state')
+        if not data or not data.get('has_state'):
+            return None
+            
+        def to_tuple(x):
+            """Convierte 'x,y' o [x,y] a (x,y)."""
+            if isinstance(x, str):
+                try:
+                    p = x.split(',')
+                    return (int(p[0]), int(p[1]))
+                except: return x
+            elif isinstance(x, (list, tuple)):
+                return tuple(x)
+            return x
+            
+        stats = {}
+        for k, v in data["stats"].items():
+            r_k = to_tuple(k)
+            # v['coords'] is list of lists [[x,z],...] -> list of tuples
+            v['coords'] = [tuple(c) for c in v['coords']]
+            stats[r_k] = v
+            
+        # Parent: key="x,z" -> value=[x,z] (or "x,z" if old format? assume new)
+        parent = {}
+        for k, v in data["parent"].items():
+            parent[to_tuple(k)] = to_tuple(v)
+
+        # Prev Cols: key="z" (str) -> value=[x,z]
+        prev_col_labels = {}
+        for k, v in data["prev_col_labels"].items():
+            prev_col_labels[int(k)] = to_tuple(v)
+
+        # Active Roots: list of [x,z]
+        active_roots = {to_tuple(k) for k in data["active_roots"]}
+        
+        # Local Column State (for mid-column resume)
+        curr_col_labels = {}
+        if "curr_col_labels" in data:
+            for k, v in data["curr_col_labels"].items():
+                curr_col_labels[int(k)] = to_tuple(v)
+        
+        active_roots_this_col = set()
+        if "active_roots_this_col" in data:
+            active_roots_this_col = {to_tuple(k) for k in data["active_roots_this_col"]}
+
+        resume_x = data.get("resume_x")
+        resume_z = data.get("resume_z")
+        
+        self.logger.info(f"Estado de escaneo recuperado. Reanudando desde X={resume_x}, Z={resume_z}")
+        return stats, parent, active_roots, prev_col_labels, curr_col_labels, active_roots_this_col, resume_x, resume_z
+
+    def _clear_scan_state(self):
+        """Clears saved scan state from context."""
+        if 'scan_state' in self.context:
+            del self.context['scan_state']
+
     async def _scan_and_find_zones(self):
         """
         Escanea y procesa zonas usando Connected Component Labeling (Union-Find) en tiempo real.
-        - Robustez total para formas irregulares.
-        - Detección: Une bloques contiguos de igual altura.
-        - Cierre: Cuando un componente deja de tener bloques en la columna actual ("Frontera X"), se cierra.
-        - Post-Proceso: Descompone el componente en rectángulos maximales (decompose).
-        - Validación: Rectángulos >= 2x2.
-        - Visualización: Diamante durante escaneo (H+1).
-        - Visualización Zonas: Bloques de LANA de COLORES distintos para cada rectángulo (H+1).
+        Soporta reanudación desde checkpoint serializado.
         """
         center_x = int(self.context.get('target_x', self.posX))
         center_z = int(self.context.get('target_z', self.posZ))
         radius = self.range 
         
-        g_min_x, g_max_x = center_x - radius, center_x + radius
-        g_min_z, g_max_z = center_z - radius, center_z + radius
+        g_min_x = center_x - radius
+        g_max_x = center_x + radius
+        g_min_z = center_z - radius
+        g_max_z = center_z + radius
         
-        # State:
-        # visual_active_blocks: set of (x, z) that are part of a valid zone (showing color).
-        visual_active_blocks = set()
+        # State Initialization
+        restored = self._load_scan_state()
+        if restored:
+            stats, parent, active_roots, prev_col_labels, saved_curr_col, saved_active_this, start_x, start_z = restored
+            current_start_x = max(g_min_x, start_x)
+            current_start_z = start_z
+        else:
+            stats = {}
+            parent = {} 
+            prev_col_labels = {} 
+            active_roots = set()
+            saved_curr_col = {}
+            saved_active_this = set()
+            current_start_x = g_min_x
+            current_start_z = g_min_z
+
+        visual_active_blocks = set() 
+        color_idx_ref = [0]
         
-        # Union-Find Structures
-        parent = {}
-        # stats: root_id -> {'min_x', 'max_x', 'min_z', 'max_z', 'h', 'coords': list of (x,z)}
-        stats = {}
-        
+        # --- Internal Functions ---
         def find(i):
             path = []
             while i != parent[i]:
-                path.append(i)
-                i = parent[i]
-            for node in path:
-                parent[node] = i
-            return i
-
-        def union(i, j):
-            root_i = find(i)
-            root_j = find(j)
-            if root_i != root_j:
-                parent[root_i] = root_j
-                # Merge stats into root_j
-                s_i = stats[root_i]
-                s_j = stats[root_j]
-                s_j['min_x'] = min(s_i['min_x'], s_j['min_x'])
-                s_j['max_x'] = max(s_i['max_x'], s_j['max_x'])
-                s_j['min_z'] = min(s_i['min_z'], s_j['min_z'])
-                s_j['max_z'] = max(s_i['max_z'], s_j['max_z'])
-                s_j['coords'].extend(s_i['coords'])
-                del stats[root_i]
-            return root_j
-
-        def new_component(x, z, h):
-            idx = (x, z)
-            parent[idx] = idx
-            stats[idx] = {
-                'min_x': x, 'max_x': x,
-                'min_z': z, 'max_z': z,
-                'h': h,
-                'coords': [(x, z)]
-            }
-            return idx
-
-        # Column tracking: z -> component_id (root not guaranteed, use find)
-        prev_col_labels = {} 
-        active_roots = set()
-        
-        # Color cycling reference (mutable list to pass by ref)
-        color_idx_ref = [0] 
-
-        self.logger.info(f"Exploración CCL+Decomposition en ({g_min_x},{g_min_z}) a ({g_max_x},{g_max_z})...")
-
-        # Cleanup helpers
-        async def cleanup_batch_diamonds(batch):
-            await asyncio.sleep(5)
-            for (bx, by, bz) in batch:
-                if (bx, bz) not in visual_active_blocks:
-                    self.mc.setBlock(bx, by, bz, 0)
-        
-        async def cleanup_zone_visuals(coords, y):
-            """Limpia la zona de visualización (Lana) tras 5s."""
-            await asyncio.sleep(5)
-            for (gx, gz) in coords:
-                self.mc.setBlock(gx, y, gz, 0) # Clear
-                if (gx, gz) in visual_active_blocks:
-                    visual_active_blocks.remove((gx, gz))
-
-        # Scan Loop X
-        for x in range(g_min_x, g_max_x + 1):
-            curr_col_labels = {}
-            active_roots_this_col = set()
-            
-            # Batch Visuals for this column
-            col_diamonds = []
-
-            # Scan Loop Z
-            for z in range(g_min_z, g_max_z + 1):
-                # Radius Check
-                if (x - center_x)**2 + (z - center_z)**2 > radius**2:
-                    continue
-                
-                h = self.mc.getHeight(x, z)
-                
-                # Visual: Diamond (Optimized Task Creation)
-                vis_y = h + 1
-                self.mc.setBlock(x, vis_y, z, 57)
-                col_diamonds.append((x, vis_y, z))
-                
-                # CCL Logic
-                current_id = new_component(x, z, h)
-                
-                # Merge Left
-                if z in prev_col_labels:
-                    prev_id = prev_col_labels[z]
-                    root_prev = find(prev_id)
-                    if stats[root_prev]['h'] == h:
-                        current_id = union(current_id, root_prev)
-                
-                # Merge Up
-                if (z - 1) in curr_col_labels:
-                    up_id = curr_col_labels[z - 1]
-                    root_up = find(up_id)
-                    if stats[root_up]['h'] == h:
-                        current_id = union(current_id, root_up)
-                
-                # Store
-                current_id = find(current_id) 
-                curr_col_labels[z] = current_id
-                active_roots_this_col.add(current_id)
-            
-            # Schedule Cleanup for THIS column (One task per column > One task per block)
-            if col_diamonds:
-                asyncio.create_task(cleanup_batch_diamonds(col_diamonds))
-
-            # Check Closed Components
-            closed_roots = set()
-            for r in active_roots:
-                real_root = find(r)
-                if real_root not in active_roots_this_col:
-                    closed_roots.add(real_root)
-            
-            # Process Closed
-            for r in closed_roots:
-                await self._process_component(stats[r], visual_active_blocks, cleanup_zone_visuals, color_idx_ref)
-                del stats[r]
-
-            # Update Active Roots
-            active_roots = active_roots_this_col
-            prev_col_labels = curr_col_labels
-            
-            # Yield less frequently (Every 10 cols instead of 5)
-            if (x - g_min_x) % 10 == 0: await asyncio.sleep(0.001)
-
-        # End: Process remaining active
-        for r in active_roots:
-            real_root = find(r)
-            if real_root in stats: 
-                await self._process_component(stats[real_root], visual_active_blocks, cleanup_zone_visuals, color_idx_ref)
-
-        self.logger.info("Exploración finalizada.")
-        self.context["scan_complete"] = True
-
-    async def _publish_zones(self):
-        """Deprecated."""
-        pass
-    async def run(self):
-        self.logger.info("ExplorerBot iniciado")
-        await super().run()
-    def setup_subscriptions(self):
-        """Suscripciones específicas del ExplorerBot."""
-        
-        super().setup_subscriptions()
-        
-        # Comandos específicos: start, set, pause
-        for cmd in ["start", "set", "pause"]:
-            self.bus.subscribe(self.id, f"command.{cmd}.v1")
-    async def handle_command(self, command: str, payload=None):
-        """Manejo de comandos específicos (start, set) + base."""
-        payload = payload or {}
-        # 1. Intentar manejar comandos específicos de ExplorerBot
-        if command == "stop":
-            msg = f"{self.id}: Deteniendo operaciones..."
-            self.logger.info(msg)
-            self.mc.postToChat(msg)
-            # Set interrupt flag
-            self.context['interrupt'] = True
-            await self.set_state(State.IDLE, "stop command")
-            return
-
-        elif command == "start":
-            # ... existing start logic ...
-            # Reset interrupt flag
-            self.context['interrupt'] = False
-            # ...
-            if "x" in payload and "z" in payload:
-                x = payload["x"]
-                z = payload["z"]
-            else:
-                try:
-                    pos = self.mc.player.getTilePos()
-                    self.posX = pos.x
-                    self.posZ = pos.z
-                    x = int(pos.x)
-                    z = int(pos.z)
-                except Exception as e:
-                    self.logger.error(f"Error obteniendo posición del jugador: {e}")
-                    self.posX = 0
-                    self.posZ = 0
-                    x = 0
-                    z = 0
-            
-            if "range" in payload:
-                self.range = payload["range"]
-
-            msg = f"{self.id}: Iniciando exploracion rápida en ({x}, {z}) con Rango={self.range}"
-            self.logger.info(msg)
-            self.mc.postToChat(msg)
-            
-            self.context.update({
-                'target_x': x, 
-                'target_z': z, 
-                'range': self.range,
-                'scan_complete': False, 
-                'report_sent': False,
-                'interrupt': False, # Ensure False on start
-                'paused': False # Ensure False on start
-            })
-            await self.set_state(State.RUNNING, "start command")
-            return
-            
-        elif command == "pause":
-            # ./explorer pause 1 -> args=['1']
-            args = payload.get("args", [])
-            val = args[0] if args else "1"
-            
-            should_pause = (val in ["1", "true", "on", "yes"])
-            self.context["paused"] = should_pause
-            
-            status_str = "PAUSADO" if should_pause else "REANUDADO"
-            msg = f"{self.id}: Exploración {status_str}"
-            self.logger.info(msg)
-            self.mc.postToChat(msg)
-            return
-            
-        elif command == "set":
-            # ... existing set logic ...
-            if "range" in payload:
-                self.range = payload["range"]
-                msg = f"{self.id}: Rango actualizado a {self.range}"
-                self.logger.info(msg)
-                self.mc.postToChat(msg)
-                self.context['range'] = self.range
-            else:
-                self.mc.postToChat(f"{self.id}: El comando set requiere 'range'.")
-            return
-            
-        await super().handle_command(command, payload)
-
-    async def _scan_and_find_zones(self):
-        """
-        Escanea y procesa zonas usando Connected Component Labeling (Union-Find).
-        - Versión robusta secuencial (Single-Thread Async).
-        - Escaneo lineal (Arriba-Abajo).
-        - Detección unificada de zonas planas.
-        - Soporte para interrupción inmediata (STOP).
-        """
-        center_x = int(self.context.get('target_x', self.posX))
-        center_z = int(self.context.get('target_z', self.posZ))
-        radius = self.range 
-        
-        g_min_x, g_max_x = center_x - radius, center_x + radius
-        g_min_z, g_max_z = center_z - radius, center_z + radius
-        
-        # State
-        visual_active_blocks = set()
-        parent = {}
-        stats = {}
-        color_idx_ref = [0]
-        
-        # CCL Helpers
-        def find(i):
-            path = []
-            while i in parent and i != parent[i]:
                 path.append(i)
                 i = parent[i]
             for node in path:
@@ -521,7 +336,7 @@ class ExplorerBot(BaseAgent):
         
         # Helpers
         async def cleanup_batch_diamonds(batch):
-            await asyncio.sleep(1)
+            await asyncio.sleep(2)
             for (bx, by, bz) in batch:
                 if (bx, bz) not in visual_active_blocks:
                     self.mc.setBlock(bx, by, bz, 0)
@@ -533,38 +348,52 @@ class ExplorerBot(BaseAgent):
                 if (gx, gz) in visual_active_blocks:
                     visual_active_blocks.remove((gx, gz))
 
-        self.logger.info(f"Iniciando escaneo secuencial en R={radius}...")
+        self.logger.info(f"Escaneo R={radius}. Inicio X={current_start_x}, Z={current_start_z}")
         
-        prev_col_labels = {} 
-        active_roots = set()
-
         try:
             # SCAN LOOP X
-            for x in range(g_min_x, g_max_x + 1):
-                if self.context.get('interrupt'): break
-
-                # PAUSE CHECK
-                while self.context.get('paused'):
-                    await asyncio.sleep(1)
-                    if self.context.get('interrupt'): break
-                if self.context.get('interrupt'): break 
-
-                curr_col_labels = {}
-                active_roots_this_col = set()
+            for x in range(current_start_x, g_max_x + 1):
+                # Init per-column variables
+                if x == current_start_x and restored:
+                    # Use saved partial state if resuming
+                    curr_col_labels = saved_curr_col
+                    active_roots_this_col = saved_active_this
+                    z_start = current_start_z
+                    # Reset 'restored' so next columns start fresh
+                    restored = False 
+                else:
+                    curr_col_labels = {}
+                    active_roots_this_col = set()
+                    z_start = g_min_z
+                
                 col_diamonds = []
 
                 # SCAN LOOP Z
-                for z in range(g_min_z, g_max_z + 1):
+                for z in range(z_start, g_max_z + 1):
                     # Yield every iteration
                     await asyncio.sleep(0)
 
-                    # Pause Check
-                    while self.context.get('paused'):
-                        await asyncio.sleep(0.5)
-                        if self.context.get('interrupt'): break
-                    
-                    if self.context.get('interrupt'): break
-                    
+                    # Check for Pause/Interrupt inside Z loop
+                    is_paused = self.context.get('paused')
+                    is_interrupted = self.context.get('interrupt')
+
+                    if is_paused or is_interrupted:
+                        # Save EXACT state mid-column
+                        self.context['scan_state'] = {
+                            "stats": stats, "parent": parent, 
+                            "prev_col_labels": prev_col_labels, "active_roots": active_roots,
+                            "curr_col_labels": curr_col_labels, "active_roots_this_col": active_roots_this_col,
+                            "resume_x": x, "resume_z": z, "has_state": True
+                        }
+                        if is_paused: 
+                            self.logger.info(f"Pausado en X={x}, Z={z}")
+                        
+                        # Cleanup logic: remove current partial diamonds instantly so no frozen blocks
+                        if col_diamonds:
+                            asyncio.create_task(cleanup_batch_diamonds(col_diamonds))
+                            
+                        return # Exit/Break completely
+
                     # Radius Check
                     if (x - center_x)**2 + (z - center_z)**2 > radius**2:
                         continue
@@ -572,11 +401,9 @@ class ExplorerBot(BaseAgent):
                     h = self.mc.getHeight(x, z)
                     vis_y = h 
                     
-                    # Visual: Diamond Trail
                     self.mc.setBlock(x, vis_y, z, 57)
                     col_diamonds.append((x, vis_y, z))
                     
-                    # CCL Logic
                     current_id = new_component(x, z, h)
                     
                     if z in prev_col_labels:
@@ -595,20 +422,16 @@ class ExplorerBot(BaseAgent):
                     curr_col_labels[z] = current_id
                     active_roots_this_col.add(current_id)
                 
-                if self.context.get('interrupt'): break
-
-                # Batch Cleanup
+                # End of column Z
                 if col_diamonds:
                     asyncio.create_task(cleanup_batch_diamonds(col_diamonds))
-
-                # Check Closed
+ 
                 closed_roots = set()
                 for r in active_roots:
                     real_root = find(r)
                     if real_root not in active_roots_this_col:
                         closed_roots.add(real_root)
                 
-                # Process Closed
                 for r in closed_roots:
                     if self.context.get('interrupt'): break
                     await self._process_component(stats[r], visual_active_blocks, cleanup_zone_visuals, color_idx_ref)
@@ -616,19 +439,146 @@ class ExplorerBot(BaseAgent):
 
                 active_roots = active_roots_this_col
                 prev_col_labels = curr_col_labels
+
             
-            # End Process remaining active
-            if not self.context.get('interrupt'):
+            if not self.context.get('interrupt') and not self.context.get('paused'):
                 for r in active_roots:
                     real_root = find(r)
                     if real_root in stats: 
                         await self._process_component(stats[real_root], visual_active_blocks, cleanup_zone_visuals, color_idx_ref)
+                
+                self._clear_scan_state()
 
         except Exception as e:
             self.logger.error(f"Error en escaneo: {e}")
-
-        if not self.context.get('interrupt'):
+            
+        if not self.context.get('interrupt') and not self.context.get('paused'):
             self.logger.info("Exploración finalizada.")
             self.context["scan_complete"] = True
+        elif self.context.get('paused'):
+            self.logger.info("Exploración PAUSADA.") # State saved above
         else:
-            self.logger.info("Exploración INTERRUMPIDA.")
+            self.logger.info("Exploración INTERRUMPIDA (Estado Guardado).")
+
+    async def _publish_zones(self):
+        """Deprecated."""
+        pass
+    async def run(self):
+        self.logger.info("ExplorerBot iniciado")
+        # Ensure we don't think we are scanning when we just booted up from a crash/stop
+        self.context["scanning_in_progress"] = False 
+        await super().run()
+
+    def setup_subscriptions(self):
+        """Suscripciones específicas del ExplorerBot."""
+        
+        super().setup_subscriptions()
+        
+        # Comandos específicos: start, set, pause
+        for cmd in ["start", "set", "pause"]:
+            self.bus.subscribe(self.id, f"command.{cmd}.v1")
+    async def handle_command(self, command: str, payload=None):
+        """Manejo de comandos específicos (start, set) + base."""
+        payload = payload or {}
+        
+        if command == "stop":
+            msg = f"{self.id}: Deteniendo operaciones..."
+            self.logger.info(msg)
+            self.mc.postToChat(msg)
+            
+            self.context['interrupt'] = True
+            
+            # Wait for scanning to save state and exit
+            # We check if task is still running
+            waited = 0
+            while self.context.get("scanning_in_progress", False) and waited < 50: 
+                 await asyncio.sleep(0.1)
+                 waited += 1
+            
+            await self.set_state(State.STOPPED, "stop command")
+            return
+
+        elif command == "start":
+            if self.state == State.RUNNING:
+                 self.mc.postToChat(f"{self.id}: Ya estoy en ejecucion.")
+                 return
+
+            # Reset flags
+            self.context['interrupt'] = False
+            self.context['paused'] = False
+            
+            # Coordinates
+            if "x" in payload and "z" in payload:
+                x, z = payload["x"], payload["z"]
+            else:
+                try:
+                    pos = self.mc.player.getTilePos()
+                    self.posX, self.posZ = pos.x, pos.z
+                    x, z = int(pos.x), int(pos.z)
+                except:
+                    x, z = 0, 0
+            
+            if "range" in payload:
+                self.range = payload["range"]
+
+            msg = f"{self.id}: Iniciando exploracion rápida en ({x}, {z}) con Rango={self.range}"
+            self.logger.info(msg)
+            self.mc.postToChat(msg)
+            
+            self.context.update({
+                'target_x': x, 'target_z': z, 'range': self.range,
+                'scan_complete': False, 'report_sent': False,
+                'interrupt': False, 'paused': False
+            })
+            # Clear old state if starting fresh command? 
+            # User might want to force restart. If so, clear scan_state.
+            # Assuming 'start' implies new mission.
+            self._clear_scan_state()
+            
+            await self.set_state(State.RUNNING, "start command")
+            return
+            
+        elif command == "pause":
+            # Just set flag. The loop will handle saving and exiting to allow state transition.
+            self.context["paused"] = True
+            
+            # Wait for loop to actually pause (exit function)
+            waited = 0
+            while self.context.get("scanning_in_progress", False) and waited < 20:
+                 await asyncio.sleep(0.1)
+                 waited += 1
+            
+            # Now transition to PAUSED state (saves checkpoint)
+            await self.set_state(State.PAUSED, "pause command")
+            self.mc.postToChat(f"{self.id}: PAUSADO y Guardado.")
+            return
+
+        elif command == "resume":
+            # Load from checkpoint
+            loaded_context = self.checkpoint.load()
+            if loaded_context:
+                self.context.update(loaded_context)
+                self.logger.info("Contexto cargado desde checkpoint.")
+            
+            self.context["paused"] = False
+            self.context["interrupt"] = False
+            self.context["scanning_in_progress"] = False # Unlock decide loop
+            
+            self.mc.postToChat(f"{self.id}: REANUDANDO desde checkpoint...")
+            await self.set_state(State.RUNNING, "resume command")
+            return
+            
+        elif command == "set":
+            if "range" in payload:
+                self.range = payload["range"]
+                msg = f"{self.id}: Rango actualizado a {self.range}"
+                self.logger.info(msg)
+                self.mc.postToChat(msg)
+                self.context['range'] = self.range
+            else:
+                self.mc.postToChat(f"{self.id}: El comando set requiere 'range'.")
+            return
+            
+        await super().handle_command(command, payload)
+
+

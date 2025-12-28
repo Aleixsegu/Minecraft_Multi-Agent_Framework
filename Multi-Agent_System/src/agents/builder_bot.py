@@ -117,7 +117,7 @@ class BuilderBot(BaseAgent):
             self.context['target_position'] = (zc_x, zc_z)
             self.context['target_height'] = zone_info.get('average_height', 0)
             
-            self.context['plan_object'] = structure # Store parser object
+            self.plan_object = structure # Store parser object (not in context)
             
             self.context['next_action'] = 'request_materials'
             
@@ -156,7 +156,15 @@ class BuilderBot(BaseAgent):
     async def _build_structure_task(self):
         """Lógica de construcción completa en segundo plano."""
         # Prepare build list if not ready
-        structure = self.context.get('plan_object')
+        structure = getattr(self, 'plan_object', None)
+        
+        # Resumption Logic: Reload structure if missing
+        if not structure and self.context.get('current_plan'):
+             from utils.reflection import get_all_structures
+             structures = get_all_structures(STRUCTURES_DIR)
+             structure = structures.get(self.context.get('current_plan'))
+             self.plan_object = structure # restore to instance
+             
         if not structure: return
 
         if not self.context.get('blocks_to_build'):

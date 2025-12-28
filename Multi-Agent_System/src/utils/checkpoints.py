@@ -32,14 +32,38 @@ class Checkpoints:
         self.file_path = self.base_path / f"{self.agent_id}.json"
         self.logger = Logger(self.__class__.__name__)
 
+    def _make_serializable(self, obj):
+        """
+        Recursively converts objects to JSON-serializable formats:
+        - Sets -> Lists
+        - Tuples -> Lists
+        - Dict keys (if tuples) -> "x,y" strings
+        """
+        if isinstance(obj, dict):
+            new_dict = {}
+            for k, v in obj.items():
+                if isinstance(k, tuple):
+                    k = f"{k[0]},{k[1]}"
+                elif not isinstance(k, str):
+                    k = str(k)
+                new_dict[k] = self._make_serializable(v)
+            return new_dict
+        elif isinstance(obj, (list, tuple)):
+            return [self._make_serializable(i) for i in obj]
+        elif isinstance(obj, set):
+            return [self._make_serializable(i) for i in list(obj)]
+        else:
+            return obj
+
     def save(self, context: Dict[str, Any]):
         """
         Guarda el contexto del agente en un archivo JSON.
+        Sanitiza automáticamente tipos no serializables.
         """
-
         try:
+            clean_context = self._make_serializable(context)
             with open(self.file_path, "w", encoding="utf-8") as f:
-                json.dump(context, f, indent=4, ensure_ascii=False)
+                json.dump(clean_context, f, indent=4, ensure_ascii=False)
             self.logger.info(f"Checkpoint guardado para {self.agent_id}")
         except Exception as e:
             self.logger.error(f"No se pudo guardar el checkpoint para {self.agent_id}: {e}")

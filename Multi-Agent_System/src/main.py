@@ -124,7 +124,7 @@ async def chat_messages(mc, parser):
         await asyncio.sleep(tiempo)
 
         mc.postToChat("[TEST] > ./explorer start 1 x=0 z=0 range=10")
-        await parser.process_chat_message("./explorer start 1 x=0 z=0 range=10")
+        #await parser.process_chat_message("./explorer start 1 x=0 z=0 range=10")
         await asyncio.sleep(tiempo)
 
         mc.postToChat("[TEST] > ./explorer start 2 (ejecutar el usuario)")

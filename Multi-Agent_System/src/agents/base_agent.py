@@ -87,9 +87,14 @@ class BaseAgent(ABC):
         self.setup_subscriptions()
         
         await self.set_state(State.IDLE, reason="initialization")
-        while self.state != State.STOPPED:
+        while True:
             # 1. Perceive: Incluye recibir mensajes en todos los estados
             await self.perceive()
+            
+            if self.state == State.STOPPED:
+                await asyncio.sleep(0.5)
+                continue
+                
             if self.state == State.PAUSED:
                 await asyncio.sleep(0.2)
                 continue
@@ -115,7 +120,7 @@ class BaseAgent(ABC):
         # log de la transición
         self.logger.log_agent_transition(prev_state, new_state, reason)
         # si es STOPPED o ERROR, save checkpoint
-        if new_state in (State.STOPPED, State.ERROR):
+        if new_state in (State.STOPPED, State.ERROR, State.PAUSED):
             self.checkpoint.save(self.context)
     # --------------------------------------------------------
     # Manejo de comandos
