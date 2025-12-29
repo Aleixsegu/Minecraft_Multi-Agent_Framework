@@ -187,8 +187,8 @@ class ExplorerBot(BaseAgent):
                 "status": "SUCCESS",
                 "payload": zone_data
             }
-            await self.bus.publish(self.id, msg)
-            self.logger.info(f"Zona Rectangular detectada: {width}x{length}")
+            await self.bus.publish("map.v1", msg)
+            self.logger.info(f"Zona enviada: {width}x{length} (H={h})")
             
             # Visualize with Distinct Block (Wool)
             color_idx = color_idx_ref[0]

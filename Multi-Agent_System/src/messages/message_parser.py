@@ -97,6 +97,11 @@ class MessageParser:
             control_message = self._create_control_message(target_agent=target_agent, msg_type=msg_type, payload=payload)
             
             # 3. Publicación
+            # Publish directly to 'broadcast' topic if target is broadcast, or 'USER_CHAT' if complex routing?
+            # If I stick to USER_CHAT, I rely on the bus.
+            # But maybe the bus uses the 'target' field to route?
+            # Let's trust 'broadcast' (lowercase) is better.
+            
             self.logger.log_agent_message(direction="SENT", message_type=control_message['type'], source="USER_CHAT", target=target_agent, payload=control_message['payload'])
             
             await self.message_bus.publish("USER_CHAT", control_message)

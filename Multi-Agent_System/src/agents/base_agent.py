@@ -144,7 +144,13 @@ class BaseAgent(ABC):
             self.mc.postToChat(f"{self.__class__.__name__} {self.id} actualizado")
             
         elif command == "status":
-            status_msg = f"Status {self.id}: STATE={self.state.name}"
+            detail = ""
+            if self.context.get("task_phase"): 
+                detail = f", Phase={self.context.get('task_phase')}"
+            elif self.context.get("next_action"):
+                detail = f", Action={self.context.get('next_action')}"
+                
+            status_msg = f"Status {self.id}: STATE={self.state.name}{detail}"
             self.logger.info(status_msg)
             self.mc.postToChat(status_msg)
             

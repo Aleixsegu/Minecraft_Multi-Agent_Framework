@@ -124,7 +124,7 @@ async def chat_messages(mc, parser):
         await asyncio.sleep(tiempo)
 
         mc.postToChat("[TEST] > ./explorer start 1 x=0 z=0 range=10")
-        #await parser.process_chat_message("./explorer start 1 x=0 z=0 range=10")
+        await parser.process_chat_message("./explorer start 1 x=0 z=0 range=10")
         await asyncio.sleep(tiempo)
 
         mc.postToChat("[TEST] > ./explorer start 2 (ejecutar el usuario)")
@@ -174,20 +174,20 @@ async def chat_messages(mc, parser):
         await parser.process_chat_message("./builder create 1")
         await asyncio.sleep(tiempo)
 
-        mc.postToChat("[TEST] > ./builder create 2")
-        await parser.process_chat_message("./builder create 2")
+        #mc.postToChat("[TEST] > ./builder create 2")
+        #await parser.process_chat_message("./builder create 2")
         await asyncio.sleep(tiempo)
 
         mc.postToChat("[TEST] > ./builder plan list")
         await parser.process_chat_message("./builder plan list")
         await asyncio.sleep(tiempo)
 
-        mc.postToChat("[TEST] > ./builder plan set 1 villagehouse1")
-        await parser.process_chat_message("./builder plan set 1 villagehouse1")
+        mc.postToChat("[TEST] > ./builder plan set 1 small_air_balloon")
+        await parser.process_chat_message("./builder plan set 1 small_air_balloon")
         await asyncio.sleep(tiempo)
 
-        mc.postToChat("[TEST] > ./builder plan set villagehouse1")
-        await parser.process_chat_message("./builder plan set villagehouse1")
+        #mc.postToChat("[TEST] > ./builder plan set villagehouse1")
+        #await parser.process_chat_message("./builder plan set villagehouse1")
         await asyncio.sleep(tiempo)
 
         mc.postToChat("[TEST] > ./builder bom 1")
@@ -202,9 +202,9 @@ async def chat_messages(mc, parser):
     await asyncio.sleep(tiempo) 
 
     #await global_sequence()
-    await explorer_sequence()
+    #await explorer_sequence()
     #await miner_sequence()
-    #await builder_sequence()
+    await builder_sequence()
 
     print("[TEST] --- Fin secuencia de prueba ---")
 
