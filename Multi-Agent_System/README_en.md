@@ -1,3 +1,3 @@
-#AQUI IRAN LOS COMANDOS EXPLICADOS EN INGLES
+# Minecraft Multi-Agent Framework
 
 [Español](README.md)

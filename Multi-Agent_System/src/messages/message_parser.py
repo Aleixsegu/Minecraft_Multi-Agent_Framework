@@ -76,8 +76,14 @@ class MessageParser:
             class_name = f"{agent_name.capitalize()}Bot"
             payload["agent_type"] = class_name
             
+            # Caso 0: Workflow
+            if agent_name.lower() == "workflow":
+                target_agent = "AgentManager"
+                msg_type = f"command.workflow.{command.lower()}"
+                payload["command_str"] = params_str # Pass raw params for specialized parsing
+
             # Caso 1: CREACIÓN -> Target siempre es AgentManager
-            if command.lower() == "create":
+            elif command.lower() == "create":
                 target_agent = "AgentManager"
                 msg_type = f"command.{command.lower()}.v1"
 

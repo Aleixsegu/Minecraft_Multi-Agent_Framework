@@ -10,17 +10,19 @@ Este proyecto integra un entorno de servidor Minecraft con un sistema multi-agen
   - `README.md`: Información específica del entorno del servidor.
   - `StartServer.bat`: Script para iniciar el servidor fácilmente en Windows.
   - `Server/`: Archivos del servidor, configuración y plugins.
-- **Multi-Agent_System/**: Plataforma en Python para el desarrollo y ejecución de agentes que interactúan con el mundo de Minecraft.
-  - `checkpoints/`: Carpeta para puntos de control o guardado.
-  - `logs/`: Registros de ejecución de los agentes y el sistema.
-  - `src/`: Código fuente principal del sistema multi-agente.
+- **Multi-Agent_System/**: Plataforma en Python para el desarrollo y ejecución de agentes.
+  - `README.md`: Documentación detallada de comandos y uso del sistema.
+  - `src/`: Código fuente principal.
     - `main.py`: Punto de entrada principal.
-    - `agents/`: Implementaciones de agentes (BuilderBot, ExplorerBot, MinerBot, etc.).
-    - `mcpi/`: Librería Python para interactuar con Minecraft vía RaspberryJuice.
-    - `strategies/`: Carpeta para estrategias de agentes.
-    - `structures/`: Carpeta para estructuras.
-    - `utils/`: Utilidades del sistema (parser, logging, bus de mensajes, etc.).
-  - `tests/`: Carpeta para pruebas adicionales.
+    - `agents/`: Implementaciones de bots (`ExplorerBot`, `BuilderBot`, `MinerBot`) y gestores (`WorkflowManager`, `AgentManager`).
+    - `strategies/`: Lógica de minería y comportamiento específico.
+    - `messages/`: Sistema de comunicación (MessageBus y Parsers).
+    - `utils/`: Utilidades (traductor de bloques, logger, lector de esquemáticos).
+    - `mcpi/`: Librería de conexión con Minecraft.
+  - `builder_structures/`: Archivos `.schem` con diseños de construcción.
+  - `checkpoints/`: Persistencia de estado de los agentes.
+  - `logs/`: Registros de ejecución y depuración.
+  - `tests/`: Tests unitarios y de integración.
 
 ## Requisitos
 
@@ -46,7 +48,7 @@ Este proyecto integra un entorno de servidor Minecraft con un sistema multi-agen
 2. Navega a la carpeta `Multi-Agent_System/src`.
 3. Ejecuta el sistema principal:
    ```powershell
-   python main.py
+   python StartFramework.py
    ```
 
 ## Créditos y Licencias
