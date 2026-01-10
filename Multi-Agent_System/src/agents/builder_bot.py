@@ -170,12 +170,9 @@ class BuilderBot(BaseAgent):
                 self.logger.info(f"{self.id} Materials OK. Transitioning to start_building.")
                 self.context['next_action'] = 'start_building'
             else:
-                # Debug output throttled every 30s
-                import time
-                last_log = self.context.get('last_missing_log', 0)
-                if time.time() - last_log > 30:
-                     self.mc.postToChat(f"{self.id} Missing ({len(missing_items)}): {', '.join(missing_items[:3])}...")
-                     self.context['last_missing_log'] = time.time()
+                # Debug output - REMOVED THROTTLE FOR DEBUGGING
+                self.mc.postToChat(f"{self.id} Missing ({len(missing_items)}): {', '.join(missing_items[:3])}...")
+                self.logger.info(f"{self.id} Detailed Missing: {missing_items}")
                 
                 self.context['next_action'] = 'wait_materials'
 
@@ -201,9 +198,12 @@ class BuilderBot(BaseAgent):
             bom = self.context.get('requirements')
             
             msg = {
+                
                 "type": "materials.requirements.v1",
-                "sender": self.id,
-                "target": "MinerBot",
+                "source": self.id,
+                "target": "BROADCAST",
+                "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat().replace('+00:00', 'Z'),
+                "status": "SUCCESS",
                 "payload": {
                     "structure": plan_name,
                     "requirements": bom,
@@ -215,7 +215,9 @@ class BuilderBot(BaseAgent):
             self.logger.info(f"Sent material request: {bom}")
             
             self.mc.postToChat(f"{self.id}: Map valid. Sending BOM to MinerBot.")
-            
+            self.context['task_phase'] = 'WAITING_MATERIALS'
+
+            """
             # --- SIMULATION (User Request) ---
             # Auto-deliver materials to self to bypass MinerBot
             self.mc.postToChat(f"{self.id} [SIM]: Auto-delivering SPECIFIC materials...")
@@ -255,7 +257,7 @@ class BuilderBot(BaseAgent):
             # Actually next loop iteration perceive runs. Then if running -> decide.
             # We need to ensure state is RUNNING.
             await self.set_state(State.RUNNING, "Simulated Inventory Injected")
-            self.context['next_action'] = 'wait_materials' # decide will overwrite this if materials valid
+            self.context['next_action'] = 'wait_materials' # decide will overwrite this if materials valid"""
             
         elif action == 'start_building' or action == 'resume_building':
              self.logger.info("Iniciando/Retomando construcción...")

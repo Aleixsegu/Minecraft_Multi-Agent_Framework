@@ -3,6 +3,7 @@ import importlib.util
 import inspect
 from agents.base_agent import BaseAgent
 from strategies.mining_strategy import MiningStrategy
+from utils.logging import Logger
 
 def get_all_agents(agents_dir):
     """
@@ -11,22 +12,28 @@ def get_all_agents(agents_dir):
     Devuelve un diccionario {nombre_clase: objeto_clase}.
     """
     found_agents = {}
+    logger = Logger("ReflectionUtils")
+    
     for filename in os.listdir(agents_dir):
         # Filtra archivos Python válidos
         if filename.endswith('.py') and filename not in ('__init__.py', 'base_agent.py', 'agent_factory.py', 'state_model.py'):
             module_name = filename[:-3] # Quita la extensión .py
             module_path = os.path.join(agents_dir, filename)
 
-            # Usa importlib para cargar el módulo dinámicamente
-            spec = importlib.util.spec_from_file_location(module_name, module_path)
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+            try:
+                # Usa importlib para cargar el módulo dinámicamente
+                spec = importlib.util.spec_from_file_location(module_name, module_path)
+                module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(module)
 
-            # Inspecciona los miembros del módulo en busca de la clase de agente
-            for name, obj in inspect.getmembers(module):
-                # Comprueba si es una clase, hereda de BaseAgent, y no es la propia BaseAgent
-                if inspect.isclass(obj) and issubclass(obj, BaseAgent) and obj is not BaseAgent:
-                    found_agents[obj.__name__] = obj
+                # Inspecciona los miembros del módulo en busca de la clase de agente
+                for name, obj in inspect.getmembers(module):
+                    # Comprueba si es una clase, hereda de BaseAgent, y no es la propia BaseAgent
+                    if inspect.isclass(obj) and issubclass(obj, BaseAgent) and obj is not BaseAgent:
+                        found_agents[obj.__name__] = obj
+            except Exception as e:
+                logger.error(f"Error cargando agente desde {filename}: {e}")
+                print(f"[ERROR] Error cargando agente desde {filename}: {e}") # Print to stdout as well for immediate visibility
     return found_agents
 
 def get_all_strategies(strategies_dir):

@@ -90,9 +90,10 @@ class MessageBus:
         
         # CASO 2: BROADCAST (Target es None o "BROADCAST")
         else:
-             # Entrega a todos los suscritos al TIPO
              if message_type in self._subscriptions:
-                 for recipient_id in self._subscriptions[message_type]:
+                 recipients = list(self._subscriptions[message_type])
+                 self.logger.info(f"Broadcasting '{message_type}' to {len(recipients)} recipients: {recipients}")
+                 for recipient_id in recipients:
                      await self._deliver(recipient_id, msg)
                      recipients_found += 1
             

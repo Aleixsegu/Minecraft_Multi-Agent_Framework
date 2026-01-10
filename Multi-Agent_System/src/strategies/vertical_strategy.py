@@ -7,51 +7,67 @@ from utils.logging import Logger
 
 class VerticalStrategy(MiningStrategy):
     """
-    Estrategia Concreta: Drilla verticalmente hacia abajo para extraer recursos
-    a profundidades crecientes.
+    Estrategia Vertical con DIAGNÓSTICO (Chat Debug).
     """
     
     def __init__(self, mc: Minecraft, logger: Logger, agent_id: str):
         super().__init__(mc, logger, agent_id)
         self.current_depth = 0
-        self.max_depth = 60 # Drilla hasta 60 bloques hacia abajo (o hasta bedrock)
+        self.max_depth = 60
         self.bedrock_hit = False
 
     async def mine(self, target_bom: Dict[int, int], current_inventory: Dict[int, int], start_pos: Dict[str, int]) -> bool:
         """
-        Ejecuta la minería vertical (hacia abajo).
+        Ejecuta minería vertical con mensajes de depuración en el chat.
         """
         if self.current_depth >= self.max_depth or self.bedrock_hit:
-            self.logger.info(f"VerticalStrategy: Fin de minería vertical (Prof: {self.current_depth}, Bedrock: {self.bedrock_hit}).")
             return False
 
-        # Posición objetivo
-        target_x = start_pos['x']
-        target_y = start_pos['y'] - self.current_depth
-        target_z = start_pos['z']
+        # 1. Asegurar Coordenadas Enteras (Crucial para mcpi)
+        start_x = int(start_pos['x'])
+        start_y = int(start_pos['y'])
+        start_z = int(start_pos['z'])
+
+        target_x = start_x
+        target_y = start_y - self.current_depth
+        target_z = start_z
 
         try:
-            # Identificar bloque
+            # 2. Leer bloque
             b_id = self.mc.getBlock(target_x, target_y, target_z)
             
-            # Chequear Bedrock (indestructible)
+            # --- DEBUG EN CHAT (Para que veas qué pasa) ---
+            # Solo mostramos mensaje cada 5 bloques o si encuentra algo interesante, para no saturar demasiado
+            # o si es el primer bloque (depth 0)
+            if self.current_depth == 0 or b_id != 0:
+                pass # self.mc.postToChat(f"[DEBUG] Prof: {self.current_depth} | En ({target_x},{target_y},{target_z}) veo ID: {b_id}")
+
+            # 3. Chequear Bedrock
             if b_id == block.BEDROCK.id:
-                self.logger.info("VerticalStrategy: Bedrock alcanzada.")
+                self.mc.postToChat(f"[DEBUG] Bedrock alcanzada en prof {self.current_depth}. Parando.")
                 self.bedrock_hit = True
                 return False
 
-            # Minar si no es aire
+            # 4. Minar (Si no es aire)
             if b_id != block.AIR.id:
+                # Poner AIRE explícitamente
                 self.mc.setBlock(target_x, target_y, target_z, block.AIR.id)
+                
+                # Añadir al inventario
                 current_inventory[b_id] = current_inventory.get(b_id, 0) + 1
-                # self.logger.debug(f"VerticalStrategy: Bloque {b_id} extraído a profundidad {self.current_depth}.")
+                
+                # Feedback visual
+                pass # self.mc.postToChat(f"[MINADO] ID {b_id} eliminado!")
             
         except Exception as e:
-            self.logger.error(f"Error en VerticalStrategy ({target_x}, {target_y}, {target_z}): {e}")
+            self.logger.error(f"Error en VerticalStrategy: {e}")
+            self.mc.postToChat(f"[ERROR] Fallo al minar: {e}")
             return False
 
         # Avanzar profundidad
         self.current_depth += 1
-        await asyncio.sleep(0.05)
+        
+        # Pausa pequeña para que veas el proceso
+        await asyncio.sleep(0.5) 
         
         return True
