@@ -204,12 +204,13 @@ class BuilderBot(BaseAgent):
                 "target": "BROADCAST",
                 "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat().replace('+00:00', 'Z'),
                 "status": "SUCCESS",
-                "payload": {
+                    "payload":{
                     "structure": plan_name,
                     "requirements": bom,
-                    "builder_id": self.id
+                    "builder_id": self.id,
+                    "build_position": self.context.get('target_position')}
                 }
-            }
+            
             # Publish Request
             await self.bus.publish("materials_request", msg)
             self.logger.info(f"Sent material request: {bom}")
@@ -328,12 +329,20 @@ class BuilderBot(BaseAgent):
                 # Yield to allow command processing
                 await asyncio.sleep(0.05)
 
+
             # Finished
             self.mc.postToChat(f"{self.id}: Construccion completada!")
             self.context['task_phase'] = 'IDLE'
             self.context['building_in_progress'] = False
             self.context['build_index'] = 0
             self.context['blocks_to_build'] = []
+
+            # --- LIMPIEZA DE MEMORIA (El arreglo clave) ---
+            self.context['task_phase'] = 'IDLE'
+            self.context['building_in_progress'] = False
+            self.context['requirements'] = {} # Olvidar requisitos
+            self.context['inventory'] = {}    # Olvidar materiales
+            self.context['latest_map'] = None   # Resetear mapa para obligar a explorar de nuevo
             
         except Exception as e:
             msg = f"Error en construcción: {e}"
