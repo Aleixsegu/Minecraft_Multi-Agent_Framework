@@ -50,7 +50,8 @@ class MinerBot(BaseAgent):
             'home_x': None,
             'home_y': None,
             'home_z': None,
-            'mining_attempts': 0, # CONTADOR DE INTENTOS
+            'mining_attempts': 0,    # Contador para Vertical
+            'mining_start_time': 0,  # Cronómetro para Grid
             'next_action': 'idle'
         })
 
@@ -113,11 +114,12 @@ class MinerBot(BaseAgent):
         self.bom_received = True 
         self.context['teleported_to_mine'] = False
         
-        # --- RESETEO ---
+        # --- RESETEOS ---
         self.context['inventory'] = {} 
         self.context['inventory_ids'] = {}
-        self.context['mining_attempts'] = 0 # Reiniciar contador para el nuevo pedido
-        # ---------------
+        self.context['mining_attempts'] = 0 
+        self.context['mining_start_time'] = time.time() # INICIAR CRONÓMETRO
+        # ----------------
 
         # Guardar CASA
         try:
@@ -140,7 +142,7 @@ class MinerBot(BaseAgent):
         else:
             self._calculate_random_zone()
 
-        # Inicializar inventarios a 0
+        # Inicializar inventarios
         for item in reqs:
             self.context['inventory'][item] = 0
             bid = get_block_id(item)
@@ -166,6 +168,7 @@ class MinerBot(BaseAgent):
     def _calculate_random_zone(self):
         hx = self.context.get('home_x', 0)
         hz = self.context.get('home_z', 0)
+        # Aleatorio entre 50 y 100 bloques desde casa
         off_x = random.randint(50, 100) * (1 if random.random() > 0.5 else -1)
         off_z = random.randint(50, 100) * (1 if random.random() > 0.5 else -1)
         self.context['target_x'] = int(hx + off_x)
@@ -266,6 +269,26 @@ class MinerBot(BaseAgent):
 
         elif action == 'mine_physical':
             if self.strategy:
+                strat_name = self.strategy.__class__.__name__
+
+                # --- CONTROL DE TIEMPO (GRID) ---
+                if "Grid" in strat_name:
+                    start_time = self.context.get('mining_start_time', 0)
+                    elapsed = time.time() - start_time
+                    if elapsed > 300: # 5 minutos
+                        self.mc.postToChat(f"[{self.id}] Se han pasado los 5 minutos de minado. El resto se sacará del creativo.")
+                        # Rellenar
+                        reqs = self.context.get('requirements', {})
+                        for item, qty in reqs.items():
+                            if item in self.context.get('tasks_physical', {}):
+                                self.context['inventory'][item] = qty 
+                                bid = get_block_id(item)
+                                if bid: self.context['inventory_ids'][bid] = qty
+                        
+                        await self._send_inventory_update(status="RUNNING")
+                        return
+
+                # Validación de altura
                 current_target_y = self.context.get('target_y', 0)
                 if current_target_y <= 0:
                      try:
@@ -307,39 +330,44 @@ class MinerBot(BaseAgent):
                 await asyncio.sleep(0.2) 
                 
                 if not active:
-                    # --- ESTRATEGIA TERMINADA (Pozo agotado o Grid completo) ---
-                    # Incrementamos contador de intentos
+                    # --- ESTRATEGIA TERMINADA ---
                     self.context['mining_attempts'] += 1
                     attempts = self.context['mining_attempts']
                     
-                    strat_name = self.strategy.__class__.__name__
-                    self.mc.postToChat(f"[{self.id}] Veta {attempts}/5 agotada.")
+                    self.mc.postToChat(f"[{self.id}] Ciclo {attempts} finalizado ({strat_name}).")
 
-                    if attempts >= 5:
-                        # --- LÍMITE ALCANZADO: RELLENO MÁGICO ---
-                        self.mc.postToChat(f"[{self.id}] Límite de 5 minas alcanzado. Obteniendo resto (Creativo)...")
-                        
+                    if attempts >= 5 and "Vertical" in strat_name:
+                        self.mc.postToChat(f"[{self.id}] Se han superado las 5 minadas. Se rellenará todo con el creativo.")
                         reqs = self.context.get('requirements', {})
                         for item, qty in reqs.items():
                             if item in self.context.get('tasks_physical', {}):
                                 self.context['inventory'][item] = qty 
                                 bid = get_block_id(item)
                                 if bid: self.context['inventory_ids'][bid] = qty
-                        
                         await self._send_inventory_update(status="RUNNING")
-                        # El próximo 'decide' verá que está completo y terminará.
                     
                     else:
-                        # --- SEGUIR MINANDO EN NUEVO SITIO ---
-                        self.mc.postToChat(f"[{self.id}] Desplazando a nueva veta...")
-                        self.context['target_x'] += 3
+                        # --- MOVIMIENTO ALEATORIO PARA AMBAS ESTRATEGIAS ---
+                        self.mc.postToChat(f"[{self.id}] Zona agotada. Moviendo a SITIO ALEATORIO...")
+                        
+                        # 1. Calcular nuevas coordenadas aleatorias
+                        self._calculate_random_zone()
+                        
+                        # 2. Intentar buscar la altura y mover al bot
+                        new_x = self.context['target_x']
+                        new_z = self.context['target_z']
                         try:
-                            ny = self.mc.getHeight(self.context['target_x'], self.context['target_z'])
-                            if ny > 0: self.context['target_y'] = ny
+                            # Teleport alto para cargar chunk
+                            self.mc.player.setTilePos(new_x, 100, new_z)
+                            await asyncio.sleep(1.0)
+                            
+                            ny = self.mc.getHeight(new_x, new_z)
+                            if ny <= 0: ny = 70
+                            self.context['target_y'] = ny
+                            self.mc.player.setTilePos(new_x, ny+1, new_z)
                         except: pass
                         
-                        self.mc.player.setTilePos(self.context['target_x'], self.context['target_y']+1, self.context['target_z'])
-                        # Reiniciamos la estrategia para que empiece de 0 en el nuevo sitio
+                        # 3. Reiniciar estrategia
                         self.load_strategy_dynamically(strat_name)
                     
                     await asyncio.sleep(1.0)

@@ -1,6 +1,6 @@
-
 import logging
 import re
+import asyncio
 
 class WorkflowManager:
     def __init__(self, agent_manager):
@@ -10,86 +10,85 @@ class WorkflowManager:
     async def execute_workflow(self, command_str):
         """
         Parses and executes a workflow command.
-        Command format: /workflow run [x=<int> z=<int>] [range=<int>] [template=<name>] [miner.strategy=<...>] ...
+        Command format: /workflow run x=100 z=200 range=50 template=house miner.strategy=grid
         """
         self.logger.info(f"Processing workflow: {command_str}")
+        self.agent_manager.mc.postToChat("[Workflow] Inicializando secuencia...")
         
         args = self._parse_args(command_str)
         
-        # 1. Setup ExplorerBot
-        if 'range' in args:
-            x = int(args.get('x', 0)) # Default to 0? Or current pos?
-            z = int(args.get('z', 0))
-            scan_range = int(args.get('range', 50))
-            
-            # Ensure Explorer exists
-            explorer = self.agent_manager.get_agent("ExplorerBot1")
-            if not explorer:
-                explorer = await self.agent_manager.create_agent("ExplorerBot", "ExplorerBot1")
-            
-            # Reset/Stop if running?
-            # explorer.stop() 
-            
-            # Explorer Start Command logic simulation
-            # We can either directly call methods or simulate a chat command
-            # Simulating chat command is safer for state transitions
-            cmd = f"./explorer start {x} {z} {scan_range}"
-            self.logger.info(f"Auto-starting Explorer: {cmd}")
-            # We need a way to inject this command. 
-            # If AgentManager has access to message parser or we can call handle_command directly.
-            # BaseAgent.handle_command is async.
-            await explorer.handle_command("start", [str(x), str(z), str(scan_range)])
+        # --- PASO 0: OBTENER O CREAR AGENTES ---
+        explorer = await self._ensure_agent("ExplorerBot", "ExplorerBot_WF")
+        builder = await self._ensure_agent("BuilderBot", "BuilderBot_WF")
+        miner = await self._ensure_agent("MinerBot", "MinerBot_WF")
 
-        # 2. Setup BuilderBot (Prepare Plan)
-        if 'template' in args:
-            template = args['template']
-            builder = self.agent_manager.get_agent("BuilderBot1")
-            if not builder:
-                builder = await self.agent_manager.create_agent("BuilderBot", "BuilderBot1")
-                
-            cmd = f"./builder plan set {template}"
-            self.logger.info(f"Auto-setting Builder plan: {cmd}")
-            # The 'plan set' command expects args: ['set', 'target_id'?, 'plan_name']
-            # Based on previous interactions: ./builder plan set 1 <name>
-            # args for handle_command: ['set', '1', template]
-            await builder.handle_command("plan", ["set", "1", template])
-
-        # 3. Setup MinerBot
+        # --- PASO 1: CONFIGURAR MINERO (Pasivo) ---
         if 'miner.strategy' in args:
             strategy = args['miner.strategy']
-            miner = self.agent_manager.get_agent("MinerBot1")
-            if not miner:
-                miner = await self.agent_manager.create_agent("MinerBot", "MinerBot1")
-            
-            # Parametros opcionales de miner
-            mx = args.get('miner.x')
-            my = args.get('miner.y')
-            mz = args.get('miner.z')
-            
-            # start <strategy> [params...]
-            cmd_args = [strategy]
-            if mx and my and mz:
-                cmd_args.extend([mx, my, mz])
-                
-            self.logger.info(f"Auto-starting Miner: ./miner start {' '.join(cmd_args)}")
-            await miner.handle_command("start", cmd_args)
+            self.logger.info(f"Workflow: Configurando Minero con estrategia {strategy}")
+            await miner.handle_command("set", {"strategy": strategy})
+        
+        await miner.handle_command("stop", {}) 
+        await miner.handle_command("resume", {})
 
-        self.agent_manager.mc.postToChat("[Workflow] Workflow initiated successfully.")
+        # --- PASO 2: CONFIGURAR BUILDER (Pasivo) ---
+        if 'template' in args:
+            template = args['template']
+            self.logger.info(f"Workflow: Configurando Builder con plantilla {template}")
+            await builder.handle_command("plan", {"args": ["set", template]})
+            await builder.handle_command("build", {})
+
+        # --- PASO 3: DISPARAR EXPLORADOR (Activo) ---
+        try:
+            scan_range = int(args.get('range', 30))
+            payload = {"range": scan_range}
+            
+            if 'x' in args and 'z' in args:
+                x = int(args['x'])
+                z = int(args['z'])
+                payload['x'] = x
+                payload['z'] = z
+                self.logger.info(f"Workflow: Iniciando Exploración en ({x}, {z})")
+                self.agent_manager.mc.postToChat(f"[Workflow] Objetivo: {x},{z}")
+            else:
+                self.logger.info(f"Workflow: Iniciando Exploración en posición del jugador")
+
+            # AHORA ES SEGURO: El bot ya ha tenido tiempo de arrancar gracias al sleep en _ensure_agent
+            await explorer.handle_command("start", payload)
+
+        except ValueError as e:
+            self.logger.error(f"Error parsing workflow coordinates: {e}")
+            self.agent_manager.mc.postToChat("[Workflow] Error: Coordenadas invalidas.")
+
+    async def _ensure_agent(self, agent_type, agent_id):
+        """
+        Recupera o crea el agente.
+        Si se crea nuevo, ESPERA OBLIGATORIAMENTE para evitar Race Condition.
+        """
+        agent = self.agent_manager.get_agent(agent_id)
+        created_new = False
+        
+        if not agent:
+            self.logger.info(f"Workflow: Creando agente {agent_id} ({agent_type})")
+            agent = await self.agent_manager.create_agent(agent_type, agent_id)
+            created_new = True
+        
+        # --- FIX DEFINITIVO ---
+        # Si el agente es nuevo, su bucle 'run()' tarda unos milisegundos en arrancar 
+        # y resetear el estado a IDLE. Si mandamos el comando 'start' antes de eso,
+        # el reset lo borra.
+        # Solución: Esperar 2 segundos ciegamente para dejar que el agente se estabilice.
+        if created_new:
+            self.logger.info(f"Workflow: Esperando arranque de {agent_id}...")
+            await asyncio.sleep(2.0)
+            
+        return agent
 
     def _parse_args(self, command_str):
-        """
-        Parses k=v arguments from string.
-        """
         args = {}
-        # Removing /workflow run prefix if present
         cleaned = command_str.replace("/workflow run", "").strip()
-        
-        # Regex for key=value pairs
-        # Matches: key=value where value can be anything until next space
         pattern = re.compile(r'([\w\.]+)=([^\s]+)')
         matches = pattern.findall(cleaned)
-        
         for k, v in matches:
             args[k] = v
-            
         return args

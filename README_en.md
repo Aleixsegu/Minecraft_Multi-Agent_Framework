@@ -59,3 +59,20 @@ This project integrates a Minecraft server environment with a programmable multi
 ---
 
 For more details, check the README files in each subfolder or the source code documentation.
+
+
+## Ejemplo de una ejecución 
+
+
+/explorer create exp1
+
+/builder create bld1
+
+/miner create min1
+
+/builder plan set small_medieval_hovel
+
+/builder build
+
+/explorer start range=20 (Espera a que termine).
+
