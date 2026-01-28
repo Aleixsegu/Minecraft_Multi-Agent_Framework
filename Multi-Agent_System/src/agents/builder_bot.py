@@ -24,9 +24,21 @@ class BuilderBot(BaseAgent):
             'plan_data': None, # Stores list of blocks to build
             'requirements': None,
             'inventory': {},
-            'build_index': 0
+            'build_index': 0,
+            'last_missing_msg_time': 0
         })
         BuilderBot.instances.append(agent_id)
+        
+        # Default plan: Penultimate structure
+        try:
+             structures = get_all_structures(STRUCTURES_DIR)
+             names = sorted(list(structures.keys()))
+             if len(names) >= 2:
+                 self.context['current_plan'] = names[-2]
+             elif names:
+                 self.context['current_plan'] = names[-1]
+        except Exception as e:
+             self.logger.error(f"Error setting default plan: {e}")
 
     async def run(self):
         self.logger.info("BuilderBot iniciado")
@@ -52,6 +64,16 @@ class BuilderBot(BaseAgent):
             # Checkeo rápido de mensajes
             msg = await asyncio.wait_for(self.bus.receive(self.id), timeout=0.01)
             if msg:
+                # --- GROUP FILTERING ---
+                # Si estamos en un grupo (Workflow), ignoramos mensajes de agentes fuera del grupo
+                sender = msg.get("source")
+                partners = self.context.get("partners")
+                if partners and sender != "User" and sender != "System" and sender != "USER_CHAT" and sender != self.id:
+                     # Check if sender is in our partner values
+                     if sender not in partners.values():
+                         return # Ignore external noise
+                
+                # self.logger.info(f"Builder Processing: {msg.get('type')} from {sender}")
                 await self.handle_incoming_message(msg)
                 
                 # Procesa mensajes específicos de datos (no comandos)
@@ -106,7 +128,7 @@ class BuilderBot(BaseAgent):
     
                 structures = get_all_structures(STRUCTURES_DIR)
                 if plan_name not in structures:
-                    self.mc.postToChat(f"{self.id}: Plan {plan_name} not found.")
+                    self.mc.postToChat(f"[{self.id}] Plan {plan_name} no encontrado.")
                     self.context['task_phase'] = 'IDLE'
                     return
     
@@ -121,7 +143,7 @@ class BuilderBot(BaseAgent):
                 # Simple check
                 if s_width > zone_width or s_length > zone_length:
                      if (s_width > zone_length or s_length > zone_width):
-                         self.logger.info(f"Zone too small for {plan_name} ({s_width}x{s_length} vs {zone_width}x{zone_length}). Ignoring.")
+                         self.logger.info(f"Zona muy pequeña para {plan_name} ({s_width}x{s_length} vs {zone_width}x{zone_length}). Ignorando.")
                          # Return to IDLE silently to wait for next map message
                          self.context['task_phase'] = 'IDLE'
                          return
@@ -143,13 +165,15 @@ class BuilderBot(BaseAgent):
                 self.context['target_height'] = zone_info.get('average_height', 0)
                 
                 # Reset build progress
-                self.context['blocks_to_build'] = structure.get_blocks()
+                raw_blocks = structure.get_blocks()
+                # Sort by Y (layer by layer), then X, then Z
+                self.context['blocks_to_build'] = sorted(raw_blocks, key=lambda k: (k['y'], k['x'], k['z']))
                 self.context['build_index'] = 0
                 
                 self.context['next_action'] = 'request_materials'
                 
             except Exception as e:
-                self.logger.error(f"Error analyzing map: {e}")
+                self.logger.error(f"Error al analizar el mapa: {e}")
                 self.context['task_phase'] = 'IDLE'
             
         # 2. ESPERANDO MATERIALES
@@ -166,13 +190,23 @@ class BuilderBot(BaseAgent):
                     missing_items.append(f"{material}: {inv.get(material,0)}/{qty}")
             
             if not missing:
-                self.mc.postToChat(f"{self.id}: Materials received. Ready to build!")
-                self.logger.info(f"{self.id} Materials OK. Transitioning to start_building.")
+                # Obtener coordenadas para el mensaje
+                t_pos = self.context.get('target_position')
+                t_y = self.context.get('target_height', 65)
+                coords_str = f"({int(t_pos[0])}, {int(t_y)}, {int(t_pos[1])})" if t_pos else "(?, ?, ?)"
+                
+                self.mc.postToChat(f"[{self.id}] Materiales recibidos. Listo para construir en {coords_str}")
+                self.logger.info(f"{self.id} Materiales OK. Iniciando construcción.")
                 self.context['next_action'] = 'start_building'
             else:
-                # Debug output - REMOVED THROTTLE FOR DEBUGGING
-                self.mc.postToChat(f"{self.id} Missing ({len(missing_items)}): {', '.join(missing_items[:3])}...")
-                self.logger.info(f"{self.id} Detailed Missing: {missing_items}")
+                now = time.time()
+                last_time = self.context.get('last_missing_msg_time', 0)
+                
+                # Throttle message to every 30 seconds
+                if now - last_time > 30:
+                    # self.mc.postToChat(f"{self.id} Faltan ({len(missing_items)}): {', '.join(missing_items[:3])}...")
+                    self.logger.info(f"{self.id} Detalle Faltantes: {missing_items}")
+                    self.context['last_missing_msg_time'] = now
                 
                 self.context['next_action'] = 'wait_materials'
 
@@ -212,16 +246,16 @@ class BuilderBot(BaseAgent):
                 }
             
             # Publish Request
-            await self.bus.publish("materials_request", msg)
-            self.logger.info(f"Sent material request: {bom}")
+            await self.bus.publish("materials.requirements.v1", msg)
+            self.logger.info(f"Peticion material enviada: {bom}")
             
-            self.mc.postToChat(f"{self.id}: Map valid. Sending BOM to MinerBot.")
+            self.mc.postToChat(f"[{self.id}] Mapa valido para construir {plan_name}. Enviando BOM al MinerBot.")
             self.context['task_phase'] = 'WAITING_MATERIALS'
 
             """
             # --- SIMULATION (User Request) ---
             # Auto-deliver materials to self to bypass MinerBot
-            self.mc.postToChat(f"{self.id} [SIM]: Auto-delivering SPECIFIC materials...")
+            self.mc.postToChat(f"{self.id} [SIM]: Auto-entregando materiales ESPECIFICOS...")
             
             # Hardcoded items as requested + dynamic BOM
             sim_payload = {
@@ -244,14 +278,14 @@ class BuilderBot(BaseAgent):
             }
             
             # DIRECT INJECTION (Skip Bus for simulation reliability)
-            self.logger.info(f"Injecting simulated inventory keys: {list(sim_payload.keys())}")
+            self.logger.info(f"Inyectando inventario simulado: {list(sim_payload.keys())}")
             self.context['inventory'] = sim_payload
             
             # Also publish for consistency/logs, but we don't wait for it
             asyncio.create_task(self.bus.publish(self.id, fake_inv_msg))
             
             # WAKE UP IMMEDIATELY
-            self.mc.postToChat(f"{self.id} [SIM]: Inventory Injected. Waking up...")
+            self.mc.postToChat(f"{self.id} [SIM]: Inventario Inyectado. Despertando...")
             self.context['task_phase'] = 'WAITING_MATERIALS'
             # Trigger check loop instantly by keeping it RUNNING if possible, 
             # though loop returns to perceive. perceive will see RUNNING?
@@ -284,13 +318,10 @@ class BuilderBot(BaseAgent):
             base_y = self.context.get('target_height')
             if base_y is None: base_y = 65
 
-            self.mc.postToChat(f"{self.id}: Start building {len(blocks)} blocks...")
-            self.logger.info(f"Construyendo {len(blocks)} bloques desde índice {idx}...")
-
             while idx < len(blocks):
                 # Check Pause
                 if self.context.get('paused'):
-                    self.logger.info("Construcción PAUSADA.")
+                    self.logger.info("Construccion PAUSADA.")
                     self.context['build_index'] = idx
                     self.context['building_in_progress'] = False
                     # El estado general pasará a PAUSED vía comando, aquí solo salimos
@@ -298,13 +329,14 @@ class BuilderBot(BaseAgent):
 
                 # Check Stop (Interrupt)
                 if self.context.get('interrupt'):
-                    self.logger.info("Construcción DETENIDA.")
+                    self.logger.info("Construccion DETENIDA.")
                     self.context['build_index'] = idx
                     self.context['building_in_progress'] = False
                     return
 
                 # Build Batch (Speed limit)
-                batch_size = 20 
+                # Slower: 5 blocks per batch
+                batch_size = 5
                 for _ in range(batch_size):
                     if idx >= len(blocks): break
                     
@@ -316,9 +348,7 @@ class BuilderBot(BaseAgent):
                     raw_name = b['block']
                     block_id = get_block_id(raw_name)
                     
-                    # Debug first block placement to confirm coords
-                    if idx == 0:
-                        self.mc.postToChat(f"{self.id} First Block: {raw_name} -> ID:{block_id} at {abs_x},{abs_y},{abs_z}")
+                    # (First Block Msg Removed)
                     
                     self.mc.setBlock(abs_x, abs_y, abs_z, block_id)
                     idx += 1
@@ -326,12 +356,12 @@ class BuilderBot(BaseAgent):
                 # Update progress
                 self.context['build_index'] = idx
                 
-                # Yield to allow command processing
-                await asyncio.sleep(0.05)
+                # Yield to allow command processing (Slower sleep)
+                await asyncio.sleep(0.2)
 
 
             # Finished
-            self.mc.postToChat(f"{self.id}: Construccion completada!")
+            self.mc.postToChat(f"[{self.id}] Construccion completada en ({start_x}, {base_y}, {start_z})")
             self.context['task_phase'] = 'IDLE'
             self.context['building_in_progress'] = False
             self.context['build_index'] = 0
@@ -354,12 +384,13 @@ class BuilderBot(BaseAgent):
 
 
     async def handle_command(self, command: str, payload=None):
+        self.logger.info(f"Builder Command: {command}")
         """Manejo de comandos específicos (plan, bom, build) + base."""
         payload = payload or {}
         args = payload.get("args", [])
 
         if command == "stop":
-            msg = f"{self.id}: Deteniendo construcción..."
+            msg = f"[{self.id}] Detenido"
             self.logger.info(msg)
             self.mc.postToChat(msg)
             
@@ -380,7 +411,7 @@ class BuilderBot(BaseAgent):
             should_pause = (val in ["1", "true", "on", "yes"])
             self.context["paused"] = should_pause
             
-            msg = f"{self.id}: PAUSADO..."
+            msg = f"[{self.id}] Pausado"
             self.logger.info(msg)
             self.mc.postToChat(msg)
             
@@ -404,7 +435,7 @@ class BuilderBot(BaseAgent):
             self.context["interrupt"] = False
             self.context["building_in_progress"] = False # Unlock decide loop
             
-            self.mc.postToChat(f"{self.id}: REANUDANDO construcción...")
+            self.mc.postToChat(f"[{self.id}] Reanudado")
             await self.set_state(State.RUNNING, "resume command")
             return
 
@@ -421,7 +452,7 @@ class BuilderBot(BaseAgent):
                 if is_direct or is_leader:
                     structures = get_all_structures(STRUCTURES_DIR)
                     names = sorted(list(structures.keys()))
-                    msg = f"Available plans: {', '.join(names)}"
+                    msg = f"Planes disponibles: {', '.join(names)}"
                     self.logger.info(msg)
                     self.mc.postToChat(msg)
                 return
@@ -429,7 +460,7 @@ class BuilderBot(BaseAgent):
             elif subcmd == "set":
                 # Check Busy
                 if self.context.get('task_phase') not in ('IDLE', None):
-                     self.mc.postToChat(f"{self.id}: Occupied ({self.context.get('task_phase')}). Use stop first.")
+                     self.mc.postToChat(f"[{self.id}] Ocupado ({self.context.get('task_phase')}). Usa stop primero.")
                      return
 
                 structures = get_all_structures(STRUCTURES_DIR)
@@ -443,18 +474,17 @@ class BuilderBot(BaseAgent):
                 
                 if template_name:
                     self.context['current_plan'] = template_name
-                    msg = f"{self.id}: Plan set to {template_name}"
+                    msg = f"[{self.id}] Plan establecido a {template_name}"
                     self.logger.info(msg)
-                    self.mc.postToChat(msg)
+                    if not payload.get("silent"):
+                        self.mc.postToChat(msg)
                     
                     # Si ya tenemos un mapa reciente, cambiamos a fase de analisis (auto-trigger)
                     if self.context.get('latest_map'):
                          self.context['task_phase'] = 'ANALYZING_MAP'
                          await self.set_state(State.RUNNING, "Plan Set with Map Ready")
-                    else:
-                         self.mc.postToChat(f"{self.id}: Waiting for map data...")
                 else:
-                    self.mc.postToChat(f"{self.id}: Template not found in arguments.")
+                    self.mc.postToChat(f"[{self.id}] Plantilla no encontrada en argumentos.")
                 return
 
         elif command == "bom":
@@ -462,7 +492,7 @@ class BuilderBot(BaseAgent):
             # Muestra BOM informativo en chat
             plan_name = self.context.get('current_plan')
             if not plan_name:
-                self.mc.postToChat(f"{self.id}: No plan set.")
+                self.mc.postToChat(f"[{self.id}] No hay plan establecido.")
                 return
 
             structures = get_all_structures(STRUCTURES_DIR)
@@ -471,28 +501,39 @@ class BuilderBot(BaseAgent):
                     structure = structures[plan_name]
                     if hasattr(structure, 'get_bom'):
                         bom = structure.get_bom()
-                        msg = f"{self.id} BOM for {plan_name}: {bom}"
+                        msg = f"{self.id} BOM para {plan_name}: {bom}"
                         self.mc.postToChat(msg)
                     else:
-                        self.mc.postToChat(f"Structure {plan_name} has no BOM.")
+                        self.mc.postToChat(f"Estructura {plan_name} no tiene BOM.")
                 except Exception as e:
-                    self.logger.error(f"Error getting BOM: {e}")
+                    self.logger.error(f"Error obteniendo BOM: {e}")
             return
 
         elif command == "build":
             # ./builder build <id> -> TRIGGER explicitly the process
             plan_name = self.context.get('current_plan')
             if not plan_name:
-                 self.mc.postToChat(f"{self.id}: No plan set. Use 'plan set' first.")
+                 self.mc.postToChat(f"[{self.id}] No hay plan. Usa 'plan set' primero.")
                  return
             
             # Check for map
             if not self.context.get('latest_map'):
-                self.mc.postToChat(f"{self.id}: Waiting for map...")
+                self.mc.postToChat(f"[{self.id}] Esperando el mapa del terreno")
             else:
-                self.mc.postToChat(f"{self.id}: Map present. Analyzing...")
+                self.mc.postToChat(f"[{self.id}] Mapa presente. Analizando...")
                 self.context['task_phase'] = 'ANALYZING_MAP'
             return
 
+        if command == "status":
+             target = f"({self.context.get('target_position')})" if self.context.get('target_position') else "None"
+             msg = f"[{self.id}] Estado: {self.state.name} | Plan: {self.context.get('current_plan')} | Fase: {self.context.get('task_phase')} | Pos: {target}"
+             self.mc.postToChat(msg)
+             return
+
+        elif command == "help":
+             msg = f"[{self.id}] Ayuda: plan list/set, bom, build, pause, resume, stop"
+             self.mc.postToChat(msg)
+             pass
+             
         # Delegar al padre si no es uno de los nuestros
         await super().handle_command(command, payload)

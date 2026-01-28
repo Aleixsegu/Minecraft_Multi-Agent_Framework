@@ -1,2 +1,0 @@
-{"timestamp": "2026-01-10T05:02:48.198907Z", "level": "INFO", "object": "id1", "module": "group.MinerBot", "message": "MinerBot iniciado"}
-{"timestamp": "2026-01-10T05:02:48.199909Z", "level": "INFO", "object": "id1", "module": "group.MinerBot", "message": "State changed from IDLE to IDLE", "event_type": "STATE_TRANSITION", "prev_state": "IDLE", "next_state": "IDLE", "reason": "initialization"}

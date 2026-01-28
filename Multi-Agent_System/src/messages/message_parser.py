@@ -80,7 +80,7 @@ class MessageParser:
             if agent_name.lower() == "workflow":
                 target_agent = "AgentManager"
                 msg_type = f"command.workflow.{command.lower()}"
-                payload["command_str"] = params_str # Pass raw params for specialized parsing
+                payload["command_str"] = params_str if params_str else "" # Pass raw params for specialized parsing
 
             # Caso 1: CREACIÓN -> Target siempre es AgentManager
             elif command.lower() == "create":
@@ -110,10 +110,10 @@ class MessageParser:
             
             self.logger.log_agent_message(direction="SENT", message_type=control_message['type'], source="USER_CHAT", target=target_agent, payload=control_message['payload'])
             
-            await self.message_bus.publish("USER_CHAT", control_message)
+            await self.message_bus.publish(control_message['type'], control_message)
             
         else:
-            self.logger.error(f"Mensaje ignorado (no coincide con formato comando): {command_str}")
+            self.logger.error(f"Mensaje ignorado (Regex Failed): '{command_str}'")
 
     def _parse_chat_params(self, param_str: Optional[str]) -> Dict[str, Any]:
         """

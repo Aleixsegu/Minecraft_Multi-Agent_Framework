@@ -6,19 +6,20 @@ This project integrates a Minecraft server environment with a programmable multi
 
 ## Project Structure
 
-- **AdventuresInMinecraft-PC/**: Contains the pre-configured Minecraft server (version 1.12) and necessary resources for connecting with external agents.
+- **AdventuresInMinecraft-PC/**: Contains the preconfigured Minecraft server (version 1.12) and necessary resources for connecting external agents.
   - `README.md`: Specific information about the server environment.
   - `StartServer.bat`: Script to easily start the server on Windows.
   - `Server/`: Server files, configuration, and plugins.
-- **Multi-Agent_System/**: Python platform for developing and running agents.
-  - `README.md`: Detailed documentation on commands and system usage.
+- **Multi-Agent_System/**: Python platform for agent development and execution.
+  - `StartFramework.py`: Main entry point.
+  - `README.md`: Detailed documentation of commands and system usage.
   - `src/`: Main source code.
-    - `main.py`: Main entry point.
+    - `main.py`: Entry point with small test games.
     - `agents/`: Bot implementations (`ExplorerBot`, `BuilderBot`, `MinerBot`) and managers (`WorkflowManager`, `AgentManager`).
-    - `strategies/`: Mining logic and specific behaviors.
+    - `strategies/`: Mining logic and specific behavior.
     - `messages/`: Communication system (MessageBus and Parsers).
     - `utils/`: Utilities (block translator, logger, schematic reader).
-    - `mcpi/`: Library for connecting with Minecraft.
+    - `mcpi/`: Minecraft connection library.
   - `builder_structures/`: `.schem` files with building designs.
   - `checkpoints/`: Agent state persistence.
   - `logs/`: Execution and debug logs.
@@ -51,6 +52,26 @@ This project integrates a Minecraft server environment with a programmable multi
    python StartFramework.py
    ```
 
+### 3. Run the Multi-Agent System Unit Tests
+
+1. Open another terminal.
+2. Create a virtual environment:
+   ```powershell
+   python -m venv venv
+   ```
+3. Activate the virtual environment:
+   ```powershell
+   .\venv\Scripts\activate
+   ```
+4. Install dependencies:
+   ```powershell
+   pip install pytest pytest-cov mock
+   ```
+5. Run the tests:
+   ```powershell
+   pytest
+   ```
+
 ## Credits and Licenses
 
 - Based on the "Adventures in Minecraft" kit by David Whale and Martin O'Hanlon.
@@ -59,20 +80,5 @@ This project integrates a Minecraft server environment with a programmable multi
 ---
 
 For more details, check the README files in each subfolder or the source code documentation.
-
-
-## Ejemplo de una ejecución 
-
-
-/explorer create exp1
-
-/builder create bld1
-
-/miner create min1
-
-/builder plan set small_medieval_hovel
-
-/builder build
-
-/explorer start range=20 (Espera a que termine).
-
+- The `Multi-Agent_System/` subfolder readme contains the available commands to execute in the Minecraft chat.
+- The `AdventuresInMinecraft-PC/` subfolder readme contains instructions to start and configure the Minecraft server.

@@ -18,7 +18,10 @@ def clear_prev_logs():
         for filename in os.listdir(LOGS_DIR):
             file_path = os.path.join(LOGS_DIR, filename)
             if os.path.isfile(file_path):
-                os.unlink(file_path)
+                try:
+                    os.unlink(file_path)
+                except Exception:
+                    pass # Ignorar archivos bloqueados
 
 class Json_log_formatter(logging.Formatter):
     """
@@ -76,7 +79,7 @@ class Logger:
             os.makedirs(LOGS_DIR, exist_ok=True)
 
             # Configurar el Handler de Archivo
-            file_handler = logging.FileHandler(f"{LOGS_DIR}/{logger_name}.jsonl", mode='w', encoding='utf-8')
+            file_handler = logging.FileHandler(f"{LOGS_DIR}/{logger_name}.log", mode='w', encoding='utf-8')
             file_handler.setFormatter(Json_log_formatter())
             self.logger.addHandler(file_handler)
             

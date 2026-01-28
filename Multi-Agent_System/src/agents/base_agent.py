@@ -120,8 +120,11 @@ class BaseAgent(ABC):
         # log de la transición
         self.logger.log_agent_transition(prev_state, new_state, reason)
         # si es STOPPED o ERROR, save checkpoint
-        if new_state in (State.STOPPED, State.ERROR, State.PAUSED):
+        if new_state in (State.ERROR, State.PAUSED):
             self.checkpoint.save(self.context)
+        elif new_state == State.STOPPED:
+             # User Request: Stop does NOT save context to allow fresh start
+             pass
     # --------------------------------------------------------
     # Manejo de comandos
     # --------------------------------------------------------
@@ -129,34 +132,41 @@ class BaseAgent(ABC):
         """Maneja comandos comunes. Las subclases deben overridear y llamar a super()."""
         if command == "pause":
             await self.set_state(State.PAUSED, "paused by command")
-            self.mc.postToChat(f"{self.__class__.__name__} {self.id} pausado")
+            self.mc.postToChat(f"[{self.id}] Pausado")
         elif command == "resume":
             self.context = self.checkpoint.load()
             await self.set_state(State.RUNNING, "resumed")
-            self.mc.postToChat(f"{self.__class__.__name__} {self.id} reanudado")
+            self.mc.postToChat(f"[{self.id}] Reanudado")
         elif command == "stop":
             await self.set_state(State.STOPPED, "stopped by command")
-            self.mc.postToChat(f"{self.__class__.__name__} {self.id} detenido")
+            self.mc.postToChat(f"[{self.id}] Detenido")
         elif command == "update":
             if payload:
                 self.context.update(payload)
             await self.set_state(State.RUNNING, "updated configuration")
-            self.mc.postToChat(f"{self.__class__.__name__} {self.id} actualizado")
+            self.mc.postToChat(f"[{self.id}] Config actualizado")
             
         elif command == "status":
-            detail = ""
-            if self.context.get("task_phase"): 
-                detail = f", Phase={self.context.get('task_phase')}"
-            elif self.context.get("next_action"):
-                detail = f", Action={self.context.get('next_action')}"
+            import json
+            # Filter large objects for summary
+            summary_ctx = {k: v for k, v in self.context.items() if k not in ['scan_state', 'latest_map', 'requirements', 'tasks_physical', 'tasks_creative']}
+            
+            # If inventory is present, summarize it count
+            if 'inventory' in self.context:
+                inv_count = len(self.context['inventory'])
+                summary_ctx['inventory'] = f"<{inv_count} items>"
                 
-            status_msg = f"Status {self.id}: STATE={self.state.name}{detail}"
-            self.logger.info(status_msg)
-            self.mc.postToChat(status_msg)
+            status_msg = f"[{self.id}] Status [{self.state.name}]: {json.dumps(summary_ctx)}"
+            self.logger.info(status_msg[:200] + "...") 
+            # self.mc.postToChat(status_msg[:100]) # Silent in base to avoid spam, subclasses handle it
+            pass
             
         elif command == "help":
-            help_msg = f"Help {self.id}: pause, resume, stop, update, status"
-            self.logger.info(help_msg)
-            self.mc.postToChat(help_msg)
+            # Reflection-ish: List all handle_command strings if we could, 
+            # but here we hardcode the base + hint at subclass
+            cmds = ["pause", "resume", "stop", "status", "help"]
+            msg = f"Comandos globales: {', '.join(cmds)}"
+            self.logger.info(msg)
+            self.mc.postToChat(msg)
         else:
             self.logger.error("unknown_command", context={"command": command})

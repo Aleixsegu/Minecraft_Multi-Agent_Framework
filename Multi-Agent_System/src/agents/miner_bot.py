@@ -56,7 +56,7 @@ class MinerBot(BaseAgent):
         })
 
         # Cargar estrategia inicial
-        self.load_strategy_dynamically("VerticalStrategy")
+        self.load_strategy_dynamically("GridStrategy")
 
     async def run(self):
         self.logger.info("MinerBot iniciado")
@@ -66,10 +66,10 @@ class MinerBot(BaseAgent):
         super().setup_subscriptions()
         for cmd in ["start", "set", "fulfill", "stop", "pause", "resume"]:
             self.bus.subscribe(self.id, f"command.{cmd}.v1")
-        self.bus.subscribe(self.id, f"materials.requirements.v1")
-        self.bus.subscribe(self.id, "region.lock.v1")
-        self.bus.subscribe(self.id, "region.unlock.v1")
-        self.bus.subscribe(self.id, "build.v1")
+            self.bus.subscribe(self.id, f"materials.requirements.v1")
+            self.bus.subscribe(self.id, "region.lock.v1")
+            self.bus.subscribe(self.id, "region.unlock.v1")
+            self.bus.subscribe(self.id, "build.v1")
 
     async def perceive(self):
         try:
@@ -79,12 +79,20 @@ class MinerBot(BaseAgent):
                 if target and target != "BROADCAST" and target != self.id:
                     return 
 
+                # --- GROUP FILTERING ---
+                sender = msg.get("source")
+                partners = self.context.get("partners")
+                if partners and sender and sender != "User" and sender != "System" and sender != "USER_CHAT" and sender != self.id:
+                     if sender not in partners.values():
+                         # self.logger.debug(f"Ignored msg from {sender}. Partners: {partners.values()}")
+                         return # Ignore external noise
+                
+                # self.logger.info(f"Processing msg: {msg.get('type')} from {sender}")
                 await self.handle_incoming_message(msg)
                 msg_type = msg.get("type")
                 payload = msg.get("payload", {})
                 
                 if msg_type == "materials.requirements.v1":
-                    self.mc.postToChat(f"[{self.id}] ¡BOM DETECTADA!")
                     self._process_bom(payload)
 
                 elif msg_type in ["region.lock.v1", "build.v1"]:
@@ -201,7 +209,7 @@ class MinerBot(BaseAgent):
         if physical_pending:
             target_pos = (self.context.get('target_x', 0), self.context.get('target_z', 0))
             if self._is_zone_forbidden(target_pos):
-                self.mc.postToChat(f"{self.id}: Zona ocupada. Esperando...")
+                self.mc.postToChat(f"[{self.id}] Zona ocupada. Esperando...")
                 self.context['next_action'] = 'wait_zone'
             else:
                 if not self.context.get('has_lock'):
@@ -245,24 +253,22 @@ class MinerBot(BaseAgent):
              mx = self.context.get('target_x')
              mz = self.context.get('target_z')
              if mx is not None and mz is not None:
-                 self.mc.postToChat(f"[{self.id}] Iniciando viaje a mina...")
-                 self.mc.player.setTilePos(mx, 100, mz) 
+                 # self.mc.postToChat(f"[{self.id}] Destino mineria: ({mx}, ?, {mz}). No TP.")
+                 # self.mc.player.setTilePos(mx, 100, mz) 
                  await asyncio.sleep(2.0)
                  
-                 attempts = 0
                  found_y = 0
-                 while attempts < 5:
-                     try:
-                         found_y = self.mc.getHeight(mx, mz)
-                         if found_y > 0: break
-                     except: pass
-                     await asyncio.sleep(1.0)
-                     attempts += 1
+                 # Try get height without tp
+                 try:
+                     found_y = self.mc.getHeight(mx, mz)
+                 except: pass
                  
                  if found_y <= 0: found_y = 70
                  self.context['target_y'] = found_y
-                 self.mc.player.setTilePos(mx, found_y + 1, mz)
-                 self.mc.postToChat(f"[{self.id}] Llegada a mina: Y={found_y}")
+                 # self.mc.player.setTilePos(mx, found_y + 1, mz)
+                 
+                 strat_name = self.strategy.__class__.__name__ if self.strategy else "None"
+                 self.mc.postToChat(f"[{self.id}] Iniciando mineria en ({mx}, {found_y}, {mz}) con estrategia {strat_name}")
             
              self.context['teleported_to_mine'] = True
              self.context['next_action'] = 'idle' 
@@ -276,7 +282,7 @@ class MinerBot(BaseAgent):
                     start_time = self.context.get('mining_start_time', 0)
                     elapsed = time.time() - start_time
                     if elapsed > 300: # 5 minutos
-                        self.mc.postToChat(f"[{self.id}] Se han pasado los 5 minutos de minado. El resto se sacará del creativo.")
+                        self.mc.postToChat(f"[{self.id}] Se han pasado los 5 minutos de minado. El resto se sacara del creativo.")
                         # Rellenar
                         reqs = self.context.get('requirements', {})
                         for item, qty in reqs.items():
@@ -300,7 +306,7 @@ class MinerBot(BaseAgent):
                     self.mc.postToChat(f"[{self.id}] Error terreno. Reseteando posición...")
                     self.context['target_x'] += 5
                     self.context['target_y'] = 80
-                    self.mc.player.setTilePos(self.context['target_x'], 80, self.context['target_z'])
+                    # self.mc.player.setTilePos(self.context['target_x'], 80, self.context['target_z'])
                     return
 
                 start_pos = {
@@ -334,10 +340,8 @@ class MinerBot(BaseAgent):
                     self.context['mining_attempts'] += 1
                     attempts = self.context['mining_attempts']
                     
-                    self.mc.postToChat(f"[{self.id}] Ciclo {attempts} finalizado ({strat_name}).")
-
                     if attempts >= 5 and "Vertical" in strat_name:
-                        self.mc.postToChat(f"[{self.id}] Se han superado las 5 minadas. Se rellenará todo con el creativo.")
+                        self.mc.postToChat(f"[{self.id}] Se han superado las 5 minadas. Se rellenara todo con el creativo.")
                         reqs = self.context.get('requirements', {})
                         for item, qty in reqs.items():
                             if item in self.context.get('tasks_physical', {}):
@@ -348,27 +352,24 @@ class MinerBot(BaseAgent):
                     
                     else:
                         # --- MOVIMIENTO ALEATORIO PARA AMBAS ESTRATEGIAS ---
-                        self.mc.postToChat(f"[{self.id}] Zona agotada. Moviendo a SITIO ALEATORIO...")
-                        
                         # 1. Calcular nuevas coordenadas aleatorias
                         self._calculate_random_zone()
                         
-                        # 2. Intentar buscar la altura y mover al bot
+                        # 2. Intentar buscar la altura
                         new_x = self.context['target_x']
                         new_z = self.context['target_z']
+                        ny = 70
                         try:
-                            # Teleport alto para cargar chunk
-                            self.mc.player.setTilePos(new_x, 100, new_z)
-                            await asyncio.sleep(1.0)
-                            
                             ny = self.mc.getHeight(new_x, new_z)
                             if ny <= 0: ny = 70
                             self.context['target_y'] = ny
-                            self.mc.player.setTilePos(new_x, ny+1, new_z)
                         except: pass
                         
-                        # 3. Reiniciar estrategia
-                        self.load_strategy_dynamically(strat_name)
+                        # Mensaje unificado de cambio de zona
+                        self.mc.postToChat(f"[{self.id}] Ciclo {attempts} finalizado. Cambio de zona de mineria a ({new_x}, {ny}, {new_z}) con estrategia {strat_name}")
+                        
+                        # 3. Reiniciar estrategia (SILENT)
+                        self.load_strategy_dynamically(strat_name, announce=False)
                     
                     await asyncio.sleep(1.0)
             else:
@@ -376,7 +377,6 @@ class MinerBot(BaseAgent):
                 await asyncio.sleep(2)
 
         elif action == 'finish_delivery':
-            self.mc.postToChat(f"[{self.id}] Pedido completado. Volviendo a CASA.")
             
             b_pos = self.context.get('build_site_pos')
             hx = self.context.get('home_x')
@@ -386,7 +386,8 @@ class MinerBot(BaseAgent):
             if dest_x is not None:
                 try:
                     dest_y = self.mc.getHeight(dest_x, dest_z) + 1
-                    self.mc.player.setTilePos(dest_x, dest_y, dest_z)
+                    # self.mc.player.setTilePos(dest_x, dest_y, dest_z)
+                    pass
                 except: pass
 
             await self._send_inventory_update(status="SUCCESS")
@@ -429,8 +430,28 @@ class MinerBot(BaseAgent):
         await self.bus.publish(self.id, msg)
 
     async def handle_command(self, command: str, payload=None):
+        self.logger.info(f"Handle Command: {command}")
         payload = payload or {}
         if command in ["stop", "pause"]: await self._release_lock()
+        
+        if command == "status":
+             strat_name = self.strategy.__class__.__name__ if self.strategy else "None"
+             work_pos = f"({self.context.get('target_x')}, {self.context.get('target_y')}, {self.context.get('target_z')})"
+             
+             msg = f"[{self.id}] Status: {self.state.name} | Strat: {strat_name} | Target: {work_pos}"
+             self.mc.postToChat(msg)
+             return
+            
+        elif command == "help":
+             msg = f"[{self.id}] Ayuda: start, set <strategy>, fulfill, tp, pause, resume, stop"
+             self.mc.postToChat(msg)
+             # Fallthrough to base# Base also prints help? 
+             # I should prevents base from printing help if I want clean output?
+             # The current code calls `await super().handle_command(command, payload)` unconditionally at the top.
+             # This means Base executes generic status/help FIRST.
+             # Then specific logic runs.
+             pass
+
         await super().handle_command(command, payload)
 
         target_id = payload.get("id") or payload.get("target_id")
@@ -449,7 +470,9 @@ class MinerBot(BaseAgent):
             return
 
         elif command == "set":
-            if "strategy" in payload: self.load_strategy_dynamically(payload["strategy"])
+            if "strategy" in payload: 
+                should_announce = not payload.get("silent", False)
+                self.load_strategy_dynamically(payload["strategy"], announce=should_announce)
             return
 
         elif command == "fulfill":
@@ -467,11 +490,12 @@ class MinerBot(BaseAgent):
             if tx is not None:
                 try:
                     ty = self.mc.getHeight(tx, tz) + 1
-                    self.mc.player.setTilePos(tx, ty, tz)
+                    # self.mc.player.setTilePos(tx, ty, tz)
+                    self.mc.postToChat(f"[{self.id}] (TP Desactivado) Ir a ({tx}, {ty}, {tz})")
                 except: pass
             return
 
-    def load_strategy_dynamically(self, strat_name):
+    def load_strategy_dynamically(self, strat_name, announce=False):
         from utils.reflection import get_all_strategies
         import os
         base_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -484,8 +508,9 @@ class MinerBot(BaseAgent):
                 break
         if selected_cls:
             self.strategy = selected_cls(self.mc, self.logger, self.id)
-            msg = f"{self.id}: Estrategia: {selected_cls.__name__}"
-            self.logger.info(msg)
-            self.mc.postToChat(msg)
+            if announce:
+                msg = f"[{self.id}] Estrategia cambiada a: {selected_cls.__name__}"
+                self.logger.info(msg)
+                self.mc.postToChat(msg)
         else:
-            self.mc.postToChat(f"{self.id}: Estrategia '{strat_name}' no encontrada.")
+            self.mc.postToChat(f"[{self.id}] Estrategia '{strat_name}' no encontrada.")

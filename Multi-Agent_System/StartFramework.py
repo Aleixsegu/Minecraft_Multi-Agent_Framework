@@ -22,7 +22,7 @@ from utils.checkpoints import clear_prev_checkpoints
 # ---------------------------------------------------------------------
 def init_mc():
     try:
-        mc = Minecraft.create("localhost", 4711)
+        mc = Minecraft.create("10.69.114.162", 4711)
         print("[INFO] Conectado a Minecraft.")
         return mc
     except Exception as e:

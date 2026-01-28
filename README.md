@@ -11,9 +11,10 @@ Este proyecto integra un entorno de servidor Minecraft con un sistema multi-agen
   - `StartServer.bat`: Script para iniciar el servidor fácilmente en Windows.
   - `Server/`: Archivos del servidor, configuración y plugins.
 - **Multi-Agent_System/**: Plataforma en Python para el desarrollo y ejecución de agentes.
+  - `StartFramework.py`: Punto de entrada principal.
   - `README.md`: Documentación detallada de comandos y uso del sistema.
   - `src/`: Código fuente principal.
-    - `main.py`: Punto de entrada principal.
+    - `main.py`: Punto de entrada con pequeños juegos de pruebas.
     - `agents/`: Implementaciones de bots (`ExplorerBot`, `BuilderBot`, `MinerBot`) y gestores (`WorkflowManager`, `AgentManager`).
     - `strategies/`: Lógica de minería y comportamiento específico.
     - `messages/`: Sistema de comunicación (MessageBus y Parsers).
@@ -51,8 +52,25 @@ Este proyecto integra un entorno de servidor Minecraft con un sistema multi-agen
    python StartFramework.py
    ```
 
+### 3. Ejecutar los tests unitarios del sistema Multi-Agente
 
-
+1. Abre otra terminal.
+2. Crea un entorno virtual:
+   ```powershell
+   python -m venv venv
+   ```
+3. Activa el entorno virtual:
+   ```powershell
+   .\venv\Scripts\activate
+   ```
+4. Instala las dependencias:
+   ```powershell
+   pip install pytest pytest-cov mock
+   ```
+5. Ejecuta los tests:
+   ```powershell
+   pytest
+   ```
 
 ## Créditos y Licencias
 
@@ -62,3 +80,5 @@ Este proyecto integra un entorno de servidor Minecraft con un sistema multi-agen
 ---
 
 Para más detalles, consulta los archivos README de cada subcarpeta o la documentación del código fuente.
+- En el readme de la subcarpeta `Multi-Agent_System/` se encuentran los comandos disponibles para ejecutar en el chat de Minecraft.
+- En el readme de la subcarpeta `AdventuresInMinecraft-PC/` se encuentran las instrucciones para iniciar y configurar el servidor de Minecraft.

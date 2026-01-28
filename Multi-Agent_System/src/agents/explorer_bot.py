@@ -15,7 +15,7 @@ class ExplorerBot(BaseAgent):
         super().__init__(agent_id, mc, bus)
         self.posX = 0
         self.posZ = 0     
-        self.range = 50                        # rango por defecto
+        self.range = 15                        # rango por defecto
 
     async def perceive(self):
         try:
@@ -482,7 +482,7 @@ class ExplorerBot(BaseAgent):
         payload = payload or {}
         
         if command == "stop":
-            msg = f"{self.id}: Deteniendo operaciones..."
+            msg = f"[{self.id}] Detenido"
             self.logger.info(msg)
             self.mc.postToChat(msg)
             
@@ -500,7 +500,7 @@ class ExplorerBot(BaseAgent):
 
         elif command == "start":
             if self.state == State.RUNNING:
-                 self.mc.postToChat(f"{self.id}: Ya estoy en ejecucion.")
+                 self.mc.postToChat(f"[{self.id}] Ya estoy en ejecucion.")
                  return
 
             # Reset flags
@@ -521,7 +521,7 @@ class ExplorerBot(BaseAgent):
             if "range" in payload:
                 self.range = payload["range"]
 
-            msg = f"{self.id}: Iniciando exploracion rápida en ({x}, {z}) con Rango={self.range}"
+            msg = f"[{self.id}] Iniciando exploracion en ({x}, {z}) con Rango={self.range}"
             self.logger.info(msg)
             self.mc.postToChat(msg)
             
@@ -550,7 +550,7 @@ class ExplorerBot(BaseAgent):
             
             # Now transition to PAUSED state (saves checkpoint)
             await self.set_state(State.PAUSED, "pause command")
-            self.mc.postToChat(f"{self.id}: PAUSADO y Guardado.")
+            self.mc.postToChat(f"[{self.id}] Pausado")
             return
 
         elif command == "resume":
@@ -564,21 +564,35 @@ class ExplorerBot(BaseAgent):
             self.context["interrupt"] = False
             self.context["scanning_in_progress"] = False # Unlock decide loop
             
-            self.mc.postToChat(f"{self.id}: REANUDANDO desde checkpoint...")
+            self.mc.postToChat(f"[{self.id}] Reanudado")
             await self.set_state(State.RUNNING, "resume command")
             return
             
         elif command == "set":
             if "range" in payload:
                 self.range = payload["range"]
-                msg = f"{self.id}: Rango actualizado a {self.range}"
+                msg = f"[{self.id}] Rango actualizado a {self.range}"
                 self.logger.info(msg)
                 self.mc.postToChat(msg)
                 self.context['range'] = self.range
             else:
-                self.mc.postToChat(f"{self.id}: El comando set requiere 'range'.")
+                self.mc.postToChat(f"[{self.id}] El comando set requiere 'range'.")
             return
             
+        if command == "status":
+             stats_count = 0
+             if self.context.get("scan_state") and "stats" in self.context["scan_state"]:
+                stats_count = len(self.context["scan_state"]["stats"])
+             
+             msg = f"[{self.id}] Status: {self.state.name} | Range: {self.range} | Target: ({self.context.get('target_x')}, {self.context.get('target_z')})"
+             self.mc.postToChat(msg)
+             return
+
+        elif command == "help":
+             msg = f"[{self.id}] Ayuda: start, set <range>, pause, resume, stop"
+             self.mc.postToChat(msg)
+             pass 
+
         await super().handle_command(command, payload)
 
 
