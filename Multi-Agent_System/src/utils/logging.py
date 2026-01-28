@@ -1,7 +1,6 @@
 import logging
 import json
 import datetime
-import sys
 import os
 from typing import Any, Dict, Optional
 from agents.state_model import State
@@ -105,7 +104,6 @@ class Logger:
         self.logger.error(message, extra=extra)
 
     #logs específicos para los agentes
-
     def log_agent_transition(self, prev_state: State, next_state: State, reason: str = "Transition"):
         """
         Función clave para loguear transiciones de estado

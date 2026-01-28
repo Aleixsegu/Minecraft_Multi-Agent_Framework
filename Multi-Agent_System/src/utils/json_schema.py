@@ -1,11 +1,8 @@
-# schema.py
 import datetime
-
 
 class SchemaError(Exception):
     """Se lanza cuando un mensaje no tiene el formato requerido"""
     pass
-
 
 def is_iso8601(timestamp: str) -> bool:
     """Comprueba si el timestamp sigue el formato ISO 8601."""
@@ -14,7 +11,6 @@ def is_iso8601(timestamp: str) -> bool:
         return True
     except ValueError:
         return False
-
 
 def validate_message(msg: dict):
     """

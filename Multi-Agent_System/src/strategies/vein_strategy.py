@@ -1,5 +1,5 @@
 from strategies.mining_strategy import MiningStrategy
-from typing import Dict, Any, List, Tuple, Set
+from typing import Dict, List, Tuple, Set
 import asyncio
 import mcpi.block as block
 from mcpi.minecraft import Minecraft
@@ -7,7 +7,7 @@ from utils.logging import Logger
 
 class VeinStrategy(MiningStrategy):
     """
-    Estrategia Concreta: Detects clusters of identical materials (veins) and recursively mines
+    Estrategia Vein. Detects clusters of identical materials (veins) and recursively mines
     adjacent blocks to maximize yield.
     """
 
@@ -23,13 +23,11 @@ class VeinStrategy(MiningStrategy):
         Ejecuta el algoritmo de exploración de vetas (Vein Mining).
         """
         if self.searching:
-            # 1. Detectar el material objetivo
+            # Detectar el material objetivo
             # Primero miramos en la posición exacta
             sx, sy, sz = start_pos['x'], start_pos['y'], start_pos['z']
             
             # Bloques que ignoramos como "veta" por defecto (aire, tierra, piedra base)
-            # Nota: Piedra (STONE) podria ser valida si eso es lo que buscamos, pero suele ser el material de relleno.
-            # Asumiremos que si está en BOM, es válido.
             ignored_blocks = [block.AIR.id, block.BEDROCK.id, block.GRASS.id, block.DIRT.id] 
             
             try:
@@ -54,7 +52,7 @@ class VeinStrategy(MiningStrategy):
                 for dx in range(-1, 2):
                     for dy in range(-1, 2):
                         for dz in range(-1, 2):
-                            if found_vein: break # Optimization loop break
+                            if found_vein: break
                             
                             chk_x, chk_y, chk_z = sx + dx, sy + dy, sz + dz
                             try:
@@ -66,7 +64,6 @@ class VeinStrategy(MiningStrategy):
 
                             if chk_valid and chk_id != block.AIR.id:
                                 # Prioridad a BOM si existe: Si BOM tiene items, y este bloque NO esta en BOM, lo ignoramos 
-                                # (salvo que BOM este vacio, entonces minamos cualquier cosa interesante)
                                 if target_bom and chk_id not in target_bom:
                                     continue
                                 
@@ -81,7 +78,7 @@ class VeinStrategy(MiningStrategy):
                 self.logger.info("VeinStrategy: No se encontró ninguna veta válida cerca.")
                 return False
         
-        # 2. Procesar la cola (Minería Recursiva/Iterativa)
+        # Procesar la cola (Minería Recursiva/Iterativa)
         if not self.queue:
             self.logger.info("VeinStrategy: Veta agotada.")
             return False

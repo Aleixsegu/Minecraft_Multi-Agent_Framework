@@ -5,10 +5,9 @@ import time
 from datetime import datetime, timezone
 from agents.base_agent import BaseAgent
 from agents.state_model import State
-from strategies.mining_strategy import MiningStrategy
 from utils.block_translator import get_block_id, get_block_name
 
-# CONSTANTES: Materiales que sí vamos a minar físicamente
+# Materiales que sí vamos a minar físicamente
 EASY_TO_MINE = {
     'stone', 'grass', 'dirt', 'cobblestone', 'sand', 'gravel', 
     'log', 'wood', 'planks', 'leaves', 'coal_ore', 'iron_ore',
@@ -42,7 +41,7 @@ class MinerBot(BaseAgent):
             'builder_id_request': None,
             'tasks_physical': {},
             'tasks_creative': {},
-            'teleported_to_mine': False,
+            'arrived_at_mine': False,
             'build_site_pos': None,
             'target_x': None,
             'target_y': None,
@@ -55,12 +54,8 @@ class MinerBot(BaseAgent):
             'next_action': 'idle'
         })
 
-        # Cargar estrategia inicial
+        # Cargar estrategia por defecto
         self.load_strategy_dynamically("GridStrategy")
-
-    async def run(self):
-        self.logger.info("MinerBot iniciado")
-        await super().run()
 
     def setup_subscriptions(self):
         super().setup_subscriptions()
@@ -71,6 +66,10 @@ class MinerBot(BaseAgent):
             self.bus.subscribe(self.id, "region.unlock.v1")
             self.bus.subscribe(self.id, "build.v1")
 
+    async def run(self):
+        self.logger.info("MinerBot iniciado")
+        await super().run()
+
     async def perceive(self):
         try:
             msg = await asyncio.wait_for(self.bus.receive(self.id), timeout=0.01)
@@ -79,15 +78,15 @@ class MinerBot(BaseAgent):
                 if target and target != "BROADCAST" and target != self.id:
                     return 
 
-                # --- GROUP FILTERING ---
+                # Filtrar grupos
                 sender = msg.get("source")
                 partners = self.context.get("partners")
                 if partners and sender and sender != "User" and sender != "System" and sender != "USER_CHAT" and sender != self.id:
                      if sender not in partners.values():
-                         # self.logger.debug(f"Ignored msg from {sender}. Partners: {partners.values()}")
-                         return # Ignore external noise
+                         self.logger.debug(f"Mensaje ignorado de {sender}. Partners: {partners.values()}")
+                         return 
                 
-                # self.logger.info(f"Processing msg: {msg.get('type')} from {sender}")
+                self.logger.info(f"Procesando mensaje: {msg.get('type')} de {sender}")
                 await self.handle_incoming_message(msg)
                 msg_type = msg.get("type")
                 payload = msg.get("payload", {})
@@ -120,16 +119,16 @@ class MinerBot(BaseAgent):
         self.context['builder_id_request'] = sender
         self.context['build_site_pos'] = build_pos
         self.bom_received = True 
-        self.context['teleported_to_mine'] = False
+        self.context['arrived_at_mine'] = False
         
-        # --- RESETEOS ---
+        # Resetear inventario
         self.context['inventory'] = {} 
         self.context['inventory_ids'] = {}
         self.context['mining_attempts'] = 0 
-        self.context['mining_start_time'] = time.time() # INICIAR CRONÓMETRO
-        # ----------------
+        self.context['mining_start_time'] = time.time() # iniciar cronómetro
 
-        # Guardar CASA
+
+        # Guardar posicion donde se contruye la estructura
         try:
             pos = self.mc.player.getTilePos()
             self.context['home_x'] = pos.x
@@ -146,7 +145,7 @@ class MinerBot(BaseAgent):
             self.context['target_x'] = bx + offset_x
             self.context['target_z'] = bz + offset_z
             self.context['target_y'] = None
-            self.logger.info(f"Target mining site: {self.context['target_x']}, {self.context['target_z']}")
+            self.logger.info(f"Objetivo de minería: {self.context['target_x']}, {self.context['target_z']}")
         else:
             self._calculate_random_zone()
 
@@ -192,9 +191,9 @@ class MinerBot(BaseAgent):
             self.context['next_action'] = 'finish_delivery'
             return
 
-        if self.context.get('mining_active') and not self.context.get('teleported_to_mine'):
+        if self.context.get('mining_active') and not self.context.get('arrived_at_mine'):
              if self.context.get('target_x') is not None:
-                self.context['next_action'] = 'initial_teleport'
+                self.context['next_action'] = 'initial_mine'
                 return
 
         # Prioridad: Creativo
@@ -249,35 +248,31 @@ class MinerBot(BaseAgent):
             if bid: self.context['inventory_ids'][bid] = qty_needed
             await self._send_inventory_update()
 
-        elif action == 'initial_teleport':
+        elif action == 'initial_mine':
              mx = self.context.get('target_x')
              mz = self.context.get('target_z')
              if mx is not None and mz is not None:
-                 # self.mc.postToChat(f"[{self.id}] Destino mineria: ({mx}, ?, {mz}). No TP.")
-                 # self.mc.player.setTilePos(mx, 100, mz) 
                  await asyncio.sleep(2.0)
                  
                  found_y = 0
-                 # Try get height without tp
                  try:
                      found_y = self.mc.getHeight(mx, mz)
                  except: pass
                  
                  if found_y <= 0: found_y = 70
                  self.context['target_y'] = found_y
-                 # self.mc.player.setTilePos(mx, found_y + 1, mz)
                  
                  strat_name = self.strategy.__class__.__name__ if self.strategy else "None"
                  self.mc.postToChat(f"[{self.id}] Iniciando mineria en ({mx}, {found_y}, {mz}) con estrategia {strat_name}")
             
-             self.context['teleported_to_mine'] = True
+             self.context['arrived_at_mine'] = True
              self.context['next_action'] = 'idle' 
 
         elif action == 'mine_physical':
             if self.strategy:
                 strat_name = self.strategy.__class__.__name__
 
-                # --- CONTROL DE TIEMPO (GRID) ---
+                # Control de tiempo (Grid)
                 if "Grid" in strat_name:
                     start_time = self.context.get('mining_start_time', 0)
                     elapsed = time.time() - start_time
@@ -306,7 +301,6 @@ class MinerBot(BaseAgent):
                     self.mc.postToChat(f"[{self.id}] Error terreno. Reseteando posición...")
                     self.context['target_x'] += 5
                     self.context['target_y'] = 80
-                    # self.mc.player.setTilePos(self.context['target_x'], 80, self.context['target_z'])
                     return
 
                 start_pos = {
@@ -336,7 +330,7 @@ class MinerBot(BaseAgent):
                 await asyncio.sleep(0.2) 
                 
                 if not active:
-                    # --- ESTRATEGIA TERMINADA ---
+                    # estrategia terminada
                     self.context['mining_attempts'] += 1
                     attempts = self.context['mining_attempts']
                     
@@ -351,11 +345,11 @@ class MinerBot(BaseAgent):
                         await self._send_inventory_update(status="RUNNING")
                     
                     else:
-                        # --- MOVIMIENTO ALEATORIO PARA AMBAS ESTRATEGIAS ---
-                        # 1. Calcular nuevas coordenadas aleatorias
+                        # movimiento aleatorio para ambas estrategias
+                        # calcular nuevas coordenadas aleatorias
                         self._calculate_random_zone()
                         
-                        # 2. Intentar buscar la altura
+                        # intentar buscar la altura
                         new_x = self.context['target_x']
                         new_z = self.context['target_z']
                         ny = 70
@@ -365,31 +359,19 @@ class MinerBot(BaseAgent):
                             self.context['target_y'] = ny
                         except: pass
                         
-                        # Mensaje unificado de cambio de zona
+                        # mensaje cambio de zona
                         self.mc.postToChat(f"[{self.id}] Ciclo {attempts} finalizado. Cambio de zona de mineria a ({new_x}, {ny}, {new_z}) con estrategia {strat_name}")
                         
-                        # 3. Reiniciar estrategia (SILENT)
+                        # reiniciar estrategia
                         self.load_strategy_dynamically(strat_name, announce=False)
                     
                     await asyncio.sleep(1.0)
             else:
-                self.logger.warning("No strategy loaded.")
+                self.logger.warning("Ninguna estrategia cargada.")
                 await asyncio.sleep(2)
 
         elif action == 'finish_delivery':
-            
-            b_pos = self.context.get('build_site_pos')
-            hx = self.context.get('home_x')
-            dest_x = b_pos[0] if b_pos else hx
-            dest_z = b_pos[1] if b_pos and len(b_pos) < 3 else (b_pos[2] if b_pos else self.context.get('home_z'))
-            
-            if dest_x is not None:
-                try:
-                    dest_y = self.mc.getHeight(dest_x, dest_z) + 1
-                    # self.mc.player.setTilePos(dest_x, dest_y, dest_z)
-                    pass
-                except: pass
-
+            self.logger.info("MinerBot finish_delivery. Actualizando inventario.")
             await self._send_inventory_update(status="SUCCESS")
             await self._release_lock()
             self.context['mining_active'] = False
@@ -443,19 +425,11 @@ class MinerBot(BaseAgent):
              return
             
         elif command == "help":
-             msg = f"[{self.id}] Ayuda: start, set <strategy>, fulfill, tp, pause, resume, stop"
+             msg = f"[{self.id}] Comandos específicos: start [x=<int>] [y=<int>] [z=<int>] [id=<AgentID>] | set strategy <vertical|grid|vein> [id=<AgentID>] | fulfill [id=<AgentID>]"
              self.mc.postToChat(msg)
-             # Fallthrough to base# Base also prints help? 
-             # I should prevents base from printing help if I want clean output?
-             # The current code calls `await super().handle_command(command, payload)` unconditionally at the top.
-             # This means Base executes generic status/help FIRST.
-             # Then specific logic runs.
              pass
 
         await super().handle_command(command, payload)
-
-        target_id = payload.get("id") or payload.get("target_id")
-        if target_id and target_id != self.id: return
 
         if command == "start":
             x = payload.get("x"); z = payload.get("z")
@@ -464,9 +438,9 @@ class MinerBot(BaseAgent):
                 self.mc.postToChat(f"[{self.id}] Posicion manual: ({x}, {z})")
             else:
                 self._calculate_random_zone()
-                self.context['teleported_to_mine'] = False
+                self.context['arrived_at_mine'] = False
                 self.context['mining_active'] = True
-                self.set_state(State.RUNNING, "Manual Start")
+                await self.set_state(State.RUNNING, "Manual Start")
             return
 
         elif command == "set":
@@ -484,17 +458,6 @@ class MinerBot(BaseAgent):
                 self.mc.postToChat(f"[{self.id}] Sin BOM.")
             return
         
-        elif command == "tp":
-            tx = self.context.get('target_x')
-            tz = self.context.get('target_z')
-            if tx is not None:
-                try:
-                    ty = self.mc.getHeight(tx, tz) + 1
-                    # self.mc.player.setTilePos(tx, ty, tz)
-                    self.mc.postToChat(f"[{self.id}] (TP Desactivado) Ir a ({tx}, {ty}, {tz})")
-                except: pass
-            return
-
     def load_strategy_dynamically(self, strat_name, announce=False):
         from utils.reflection import get_all_strategies
         import os

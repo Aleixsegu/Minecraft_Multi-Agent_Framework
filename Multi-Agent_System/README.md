@@ -24,7 +24,7 @@ Para ejecutar comandos, abre el chat de Minecraft (`T`) y escribe empezando por 
     ```text
     ./create <AgentType> [id=<CustomID>]
     ```
-    *   Crea una nueva instancia de un bot.
+    Crea una nueva instancia de un bot.
     *   `AgentType`: `explorer`, `builder`, `miner`.
     *   `id`: *(Opcional)* Identificador único (ej: `explorer1`). Por defecto: Identificador aleatorio.
 
@@ -53,7 +53,7 @@ Responsable de escanear el terreno y reportar zonas planas.
     ```text
     ./explorer start [x=<int>] [z=<int>] [range=<int>] [id=<AgentID>]
     ```
-    *   Inicia la exploración.
+    Inicia la exploración.
     *   `x`, `z`: *(Opcional)* Coordenadas. Por defecto: posición del jugador.
     *   `range`: *(Opcional)* Radio de escaneo. Por defecto: 15.
     *   `id`: *(Opcional)* Identificador único (ej: `explorer1`) para ejecutar el comando sobre una instancia específica. Por defecto: El comando se ejecuta para todas las instancias.
@@ -62,7 +62,7 @@ Responsable de escanear el terreno y reportar zonas planas.
     ```text
     ./explorer set range <int> [id=<AgentID>]
     ```
-    *   Actualiza el radio de escaneo sin reiniciar.
+    Actualiza el radio de escaneo sin reiniciar.
     *   `int`: valor del nuevo radio de escaneo.
     *   `id`: *(Opcional)* Identificador único (ej: `explorer1`) para ejecutar el comando sobre una instancia específica. Por defecto: El comando se ejecuta para todas las instancias.
 
@@ -75,7 +75,7 @@ Responsable de obtener recursos.
     ```text
     ./miner start [x=<int>] [y=<int>] [z=<int>] [id=<AgentID>]
     ```
-    *   Inicia la minería.
+    Inicia la minería.
     *   `x`, `y`, `z`: *(Opcional)* Coordenadas. Por defecto: posición del jugador.
     *   `id`: *(Opcional)* Identificador único (ej: `miner1`) para ejecutar el comando sobre una instancia específica. Por defecto: El comando se ejecuta para todas las instancias.
     *   Estrategia por defecto: gridStrategy
@@ -84,7 +84,7 @@ Responsable de obtener recursos.
     ```text
     ./miner set strategy <vertical|grid|vein> [id=<AgentID>]
     ```
-    *   Cambia la estrategia de minería dinámicamente.
+    Cambia la estrategia de minería dinámicamente.
     *   `vertical`: Minería vertical.
     *   `grid`: Minería en cuadrícula.
     *   `vein`: Minería por vetas.
@@ -94,7 +94,7 @@ Responsable de obtener recursos.
     ```text
     ./miner fulfill [id=<AgentID>]
     ```
-    *   Inicia la recolección basada en la "Bill of Materials" (BOM) recibida del BuilderBot.
+    Inicia la recolección basada en la "Bill of Materials" (BOM) recibida del BuilderBot.
     *   `id`: *(Opcional)* Identificador único (ej: `miner1`) para ejecutar el comando sobre una instancia específica. Por defecto: El comando se ejecuta para todas las instancias.
 
 ---
@@ -102,35 +102,34 @@ Responsable de obtener recursos.
 ### Comandos Específicos de BuilderBot
 Responsable de gestionar planos y construir estructuras bloque a bloque.
 
-1.  **`start`**
+1.  **`build`**
     ```text
     ./builder build [id=<AgentID>]
     ```
-    *   Inicia la construccion en la posicion encontrada por el explorerbot. 
+    Inicia la construccion en la posicion encontrada por el explorerbot. 
     *   `id`: *(Opcional)* Identificador único (ej: `builder1`) para ejecutar el comando sobre una instancia específica. Por defecto: El comando se ejecuta para todas las instancias.
 
 2.  **`plan list`**
     ```text
     ./builder plan list [id=<AgentID>]
     ```
-    *   Muestra en el chat todos los diseños (`.schem`) disponibles en `builder_structures/`.
+    Muestra en el chat todos los diseños (`.schem`) disponibles en `builder_structures/`.
     *   `id`: *(Opcional)* Identificador único (ej: `builder1`) para ejecutar el comando sobre una instancia específica. Por defecto: El comando se ejecuta para todas las instancias.
 
-
-2.  **`plan set`**
+3.  **`plan set`**
     ```text
     ./builder plan set <Template> [id=<AgentID>]
     ```
-    *   Asigna el diseño a construir.
+    Asigna el diseño a construir.
     *   `<Template>`: Nombre del diseño a construir (ej: `small_medieval_hovel`).
     *   `id`: *(Opcional)* Identificador único (ej: `builder1`) para ejecutar el comando sobre una instancia específica. Por defecto: El comando se ejecuta para todas las instancias.
    
 
-3.  **`bom`** (Bill Of Materials)
+4.  **`bom`** (Bill Of Materials)
     ```text    
     ./builder bom [id=<AgentID>]
     ```
-    *   Fuerza el cálculo y envío de la lista de materiales requeridos al MinerBot.
+    Fuerza el cálculo y envío de la lista de materiales requeridos al MinerBot.
     *   `id`: *(Opcional)* Identificador único (ej: `builder1`) para ejecutar el comando sobre una instancia específica. Por defecto: El comando se ejecuta para todas las instancias.
 
 ---
@@ -139,10 +138,9 @@ Responsable de gestionar planos y construir estructuras bloque a bloque.
 Automatiza la coordinación de todos los bots (Exploración -> Diseño -> Minería -> Construcción).
 
 ```text
-./workflow run [x=<int>] [z=<int>] [range=<int>] [template=<name>] [miner.strategy=<vertical|grid|vein>] [miner.x=<int>miner.y=<int>miner.z=<int>]
+./workflow run [x=<int>] [z=<int>] [range=<int>] [template=<name>] [miner.strategy=<vertical|grid|vein>]
 ```
 *   `x`, `z`: *(Opcional)* Coordenadas centrales de exploración. Por defecto: posición actual.
 *   `range`: *(Opcional)* Radio de escaneo del Explorer. Por defecto: `15`.
 *   `template`: *(Opcional)* Nombre de la estructura a construir (ej: `small_medieval_hovel`). Por defecto: `small_ovni`
 *   `miner.strategy`: *(Opcional)* Estrategia de minería (`vertical`, `grid`, `vein`). Por defecto: `gridStrategy`.
-*   `miner.x`, `miner.y`, `miner.z`: *(Opcional)* Coordenadas de minería. Por defecto: posición actual.

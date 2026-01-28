@@ -1,8 +1,6 @@
 import asyncio
-import os
 from utils.logging import Logger
 from agents.agent_factory import AgentFactory
-from utils.reflection import get_all_structures
 from agents.workflow_manager import WorkflowManager
 
 class AgentManager:
@@ -18,7 +16,6 @@ class AgentManager:
         self.logger.info("AgentManager inicializado.")
         self.factory = AgentFactory()
         
-        # Dictionary {agent_id: agent_instance}
         self.agents_map = {} 
         
         self.workflow_manager = WorkflowManager(self)
@@ -29,7 +26,6 @@ class AgentManager:
         """Se suscribe a los eventos de creación."""
         self.bus.register_agent(self.__class__.__name__)
         self.bus.subscribe(self.__class__.__name__, "command.create.v1")
-        # Subscribe to workflow commands if MessageParser routes them here
         self.bus.subscribe(self.__class__.__name__, "command.workflow.run")
 
     async def run(self):

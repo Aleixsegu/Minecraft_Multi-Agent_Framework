@@ -18,11 +18,11 @@ from utils.logging import clear_prev_logs
 from utils.checkpoints import clear_prev_checkpoints
 
 # ---------------------------------------------------------------------
-# Lanza el mundo de Minecraft
+# Conexión con el servidor de Minecraft
 # ---------------------------------------------------------------------
 def init_mc():
     try:
-        mc = Minecraft.create("10.69.114.162", 4711)
+        mc = Minecraft.create()
         print("[INFO] Conectado a Minecraft.")
         return mc
     except Exception as e:
@@ -31,7 +31,7 @@ def init_mc():
 
 
 # ---------------------------------------------------------------------
-# REGISTRO DE AGENTES
+# Registro de agentes
 # ---------------------------------------------------------------------
 def register_agents(factory, agents_dir):
     """
@@ -48,9 +48,8 @@ def register_agents(factory, agents_dir):
         factory.register_agent_class(name, cls)
 
 # ---------------------------------------------------------------------
-# LÓGICA PRINCIPAL
+# Lógica principal
 # ---------------------------------------------------------------------
-
 async def main():
 
     print("=== Iniciando TAP Minecraft Agent Framework ===")
@@ -83,7 +82,7 @@ async def main():
         await asyncio.sleep(1)
 
 # ---------------------------------------------------------------------
-# EJECUCIÓN
+# Ejecución
 # ---------------------------------------------------------------------
 if __name__ == "__main__":
     try:
@@ -91,3 +90,4 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("\nPrograma detenido por el usuario")
         sys.exit(0)
+    

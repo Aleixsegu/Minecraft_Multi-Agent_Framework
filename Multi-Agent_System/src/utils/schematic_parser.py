@@ -1,10 +1,8 @@
-
 import gzip
 import struct
-import os
 
 class SimpleNBT:
-    # Tag Constants
+    # Constantes de Etiquetas
     TAG_End = 0
     TAG_Byte = 1
     TAG_Short = 2
@@ -21,11 +19,11 @@ class SimpleNBT:
 
     @staticmethod
     def parse(stream):
-        # Read Root Tag (Type + Name + Payload)
+        # Leer Etiqueta Raíz (Tipo + Nombre + Carga Útil)
         tag_type = SimpleNBT.read_byte(stream)
         if tag_type == SimpleNBT.TAG_End:
             return None
-        _ = SimpleNBT.read_string(stream) # Name is usually empty for root or irrelevant
+        _ = SimpleNBT.read_string(stream) # El nombre suele estar vacío para la raíz o ser irrelevante
         payload = SimpleNBT.read_payload(stream, tag_type)
         return payload
 
@@ -110,7 +108,7 @@ class SchematicParser:
         self.data = self._load()
         self.blocks_cache = None
         
-        # Dimensions
+        # Dimensiones
         self.width = 0
         self.height = 0
         self.length = 0
@@ -156,25 +154,25 @@ class SchematicParser:
             return self.blocks_cache
 
         root = self.data
-        # Unwrap Schematic if present
+        # Desenvolver Esquema si está presente
         if 'Schematic' in root:
             root = root['Schematic']
 
-        # Use stored dimensions
+        # Usar dimensiones almacenadas
         width = self.width
         height = self.height
         length = self.length
 
-        # Handle different structures
+        # Manejar diferentes estructuras
         palette = {}
         block_data_bytes = b''
 
-        # Case 1: Nested Blocks compound (e.g. WorldEdit/Sponge v3?)
+        # Caso 1: Compuesto anidado de Bloques (ej. WorldEdit/Sponge v3?)
         if 'Blocks' in root and isinstance(root['Blocks'], dict):
             blocks_compound = root['Blocks']
             palette = blocks_compound.get('Palette', {})
             block_data_bytes = blocks_compound.get('Data', b'')
-        # Case 2: Flattened (Sponge v1/v2)
+        # Caso 2: Aplanado (Sponge v1/v2)
         else:
             palette = root.get('Palette', {})
             block_data_bytes = root.get('BlockData', b'')
@@ -184,7 +182,7 @@ class SchematicParser:
         block_indices = self.decode_block_data(block_data_bytes)
         
         blocks = []
-        # Sponge schematics order: (y * length + z) * width + x
+        # Orden de esquemáticos Sponge: (y * length + z) * width + x
         idx = 0
         for y in range(height):
             for z in range(length):
@@ -207,7 +205,7 @@ class SchematicParser:
         blocks = self.get_blocks()
         bom = {}
         for b in blocks:
-            # Clean up block name (remove minecraft: prefix and properties like [facing=...])
+            # Limpiar nombre del bloque (eliminar prefijo minecraft: y propiedades como [facing=...])
             full_name = b['block']
             name = full_name.split('[')[0].replace('minecraft:', '')
             

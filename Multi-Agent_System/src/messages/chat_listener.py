@@ -1,13 +1,11 @@
 import asyncio
-import time
-from mcpi.minecraft import Minecraft
 from messages.message_parser import MessageParser
 from utils.logging import Logger
 
 class ChatListener:
     """
     Clase dedicada a la conexión con Minecraft y a la escucha asíncrona continua 
-    de mensajes de chat (polling). Pasa los mensajes sin procesar al CommandParser.
+    de mensajes de chat (polling). Pasa los mensajes sin procesar al MessageParser.
     """
 
     def __init__(self, message_parser: MessageParser, mc):
@@ -35,7 +33,7 @@ class ChatListener:
                     chat_message = post.message.strip()
                     self.logger.debug(f"Mensaje sin procesar detectado: {chat_message}")
 
-                    # El Listener solo PIDE al Parser que procese la cadena
+                    # El Listener solo pide al Parser que procese la cadena
                     await self.parser.process_chat_message(chat_message)
                 
                 # Pausa asíncrona para liberar el bucle principal (0.1s)

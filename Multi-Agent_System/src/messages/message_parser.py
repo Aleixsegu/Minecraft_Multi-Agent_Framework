@@ -1,5 +1,4 @@
 import re
-import asyncio
 import datetime
 from messages.message_bus import MessageBus
 from utils.logging import Logger
@@ -22,23 +21,14 @@ class MessageParser:
         self.message_bus = message_bus
         self.logger = Logger(self.__class__.__name__)
         
-        # Cargar dinámicamente los tipos de agentes válidos
-        self.root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) 
-        agents_dir = os.path.join(self.root_dir, "agents")
+        # Cargar dinámicamente con reflexión los tipos de agentes válidos
+        self.root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__))) # Multi-Agent_System/src
+        agents_dir = os.path.join(self.root_dir, "agents") # Multi-Agent_System/src/agents
         self.valid_agents = set(name.lower().replace('bot', '') for name in get_all_agents(agents_dir).keys())
-        self.valid_agents.add("workflow")
+        self.valid_agents.add("workflow") # Añadimos el workflow
         
-        # Cargar estructuras para incluirlas en IGNORED_IDS (para que el parser no las confunda con IDs)
-        structures_dir = os.path.join(self.root_dir, "builder_structures")  # Asumiendo path paralelo a src/agents
-        # Como estamos en messages/ (dentro de src), root_dir es src. NO! root_dir es Multi-Agent_System/src
-        # Re-calculando path correcto:
-        # __file__ = .../Multi-Agent_System/src/messages/message_parser.py
-        # root_dir = .../Multi-Agent_System/src
-        # builder_structures = .../Multi-Agent_System/builder_structures
-        
-        base_root = os.path.dirname(self.root_dir) # .../Multi-Agent_System
-        self.structures_dir = os.path.join(base_root, "builder_structures")
-
+        # Cargar dinámicamente con reflexión los nombres de las estructuras disponibles
+        self.structures_dir = os.path.join(self.root_dir, "builder_structures") # Multi-Agent_System/src/builder_structures
         self.structures = list(get_all_structures(self.structures_dir).keys())
         
         # Definir IDs que ignoraremos (verbos, keywords, y nombres de estructuras)
@@ -56,7 +46,7 @@ class MessageParser:
         # Logueamos todo mensaje recibido para depuración
         self.logger.info(f"Analizando mensaje: {command_str}")
         
-        # 1. Análisis del comando usando la Regex
+        # Análisis del comando usando la Regex
         match = COMMAND_PATTERN.match(command_str)
         
         if match:
@@ -68,46 +58,39 @@ class MessageParser:
                 return
 
             # Análisis de parámetros
-            payload = self._parse_chat_params(params_str)
-            
-            # Lógica de Routing normal
-            
-            # Siempre añadimos el tipo de agente al payload para el filtrado en el receptor
+            payload = self._parse_chat_params(params_str) 
+      
+            # Añadimos el tipo de agente al payload para el filtrado en el receptor
             class_name = f"{agent_name.capitalize()}Bot"
             payload["agent_type"] = class_name
             
-            # Caso 0: Workflow
+            # Caso 0: WORKFLOW
             if agent_name.lower() == "workflow":
                 target_agent = "AgentManager"
                 msg_type = f"command.workflow.{command.lower()}"
-                payload["command_str"] = params_str if params_str else "" # Pass raw params for specialized parsing
+                payload["command_str"] = params_str if params_str else "" 
 
-            # Caso 1: CREACIÓN -> Target siempre es AgentManager
+            # Caso 1: CREACIÓN (Target siempre es AgentManager)
             elif command.lower() == "create":
                 target_agent = "AgentManager"
                 msg_type = f"command.{command.lower()}.v1"
 
-            # Caso 2: UNICAST -> Si hay un ID explícito
+            # Caso 2: UNICAST (Si hay un ID explícito)
             elif "id" in payload:
                 target_agent = payload["id"]
                 msg_type = f"command.{command.lower()}.v1"
 
-            # Caso 3: BROADCAST GENÉRICO
+            # Caso 3: BROADCAST 
             else:
                 target_agent = "BROADCAST"
                 msg_type = f"command.{command.lower()}.v1"
 
             self.logger.debug(f"Comando detectado: Target={target_agent}, Type={msg_type}, Payload={payload}")
 
-            # 2. Creación del mensaje estandarizado
+            # Creación del mensaje estandarizado
             control_message = self._create_control_message(target_agent=target_agent, msg_type=msg_type, payload=payload)
             
-            # 3. Publicación
-            # Publish directly to 'broadcast' topic if target is broadcast, or 'USER_CHAT' if complex routing?
-            # If I stick to USER_CHAT, I rely on the bus.
-            # But maybe the bus uses the 'target' field to route?
-            # Let's trust 'broadcast' (lowercase) is better.
-            
+            # Publicación
             self.logger.log_agent_message(direction="SENT", message_type=control_message['type'], source="USER_CHAT", target=target_agent, payload=control_message['payload'])
             
             await self.message_bus.publish(control_message['type'], control_message)
@@ -124,7 +107,7 @@ class MessageParser:
         
         params = {}
         
-        # 1. Extraer key=value pairs
+        # Extraer key=value pairs
         for match in PARAM_PATTERN.finditer(param_str):
             key = match.group(1)
             value_str = match.group(2)

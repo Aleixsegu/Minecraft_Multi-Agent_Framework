@@ -1,4 +1,3 @@
-
 # MAPPING: Standard mapping logic
 BLOCK_MAPPING = {
     "air": 0,

@@ -37,7 +37,7 @@ class AgentFactory:
         if agent_class is None:
             raise ValueError(f"Tipo de Agente no registrado: {agent_type}")
         
-        # Usar el ID proporcionado o el tipo por defecto
+        # Usar el ID de la instancia o el tipo de agente por defecto
         final_id = agent_id if agent_id else agent_type
         
         return agent_class(final_id, mc, message_bus)

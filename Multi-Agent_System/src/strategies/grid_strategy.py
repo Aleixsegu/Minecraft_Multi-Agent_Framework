@@ -1,5 +1,5 @@
 from strategies.mining_strategy import MiningStrategy
-from typing import Dict, Any
+from typing import Dict
 import asyncio
 import mcpi.block as block
 from utils.logging import Logger
@@ -7,8 +7,7 @@ from mcpi.minecraft import Minecraft
 
 class GridStrategy(MiningStrategy):
     """
-    Estrategia Concreta: Explora una región cúbica siguiendo un patrón de cuadrícula
-    para una cobertura uniforme.
+    Estrategia Grid. Explores a cubic region following a structured grid pattern for uniform coverage.
     """
     
     def __init__(self, mc: Minecraft, logger: Logger, agent_id: str):
@@ -34,18 +33,17 @@ class GridStrategy(MiningStrategy):
         target_y = start_pos['y'] - self.current_y
         target_z = start_pos['z'] + self.current_z
 
-        # Minería Real
         try:
-            # 1. Identificar el bloque antes de picarlo
+            # Identificar el bloque antes de picarlo
             block_id = self.mc.getBlock(target_x, target_y, target_z)
 
-            # 2. Si no es aire, lo picamos y lo añadimos al inventario
+            # Si no es aire, lo picamos y lo añadimos al inventario
             if block_id != block.AIR.id:
                 self.mc.setBlock(target_x, target_y, target_z, block.AIR.id)
                 current_inventory[block_id] = current_inventory.get(block_id, 0) + 1
                 self.logger.info(f"Bloque recolectado: ID {block_id} en ({target_x}, {target_y}, {target_z})")
             else:
-                 self.logger.debug(f"Bloque de aire encontrado en ({target_x}, {target_y}, {target_z}), ignorando.")
+                self.logger.debug(f"Bloque de aire encontrado en ({target_x}, {target_y}, {target_z}), ignorando.")
             
         except Exception as e:
             self.logger.error(f"Error minando en ({target_x}, {target_y}, {target_z}): {e}")

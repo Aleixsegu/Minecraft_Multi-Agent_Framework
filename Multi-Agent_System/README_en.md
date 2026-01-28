@@ -24,7 +24,7 @@ To execute commands, open the Minecraft chat (`T`) and type starting with `./`.
     ```text
     ./create <AgentType> [id=<CustomID>]
     ```
-    *   Creates a new instance of a bot.
+    Creates a new instance of a bot.
     *   `AgentType`: `explorer`, `builder`, `miner`.
     *   `id`: *(Optional)* Unique identifier (e.g., `explorer1`). Default: Random identifier.
 
@@ -53,7 +53,7 @@ Responsible for scanning the terrain and reporting flat zones.
     ```text
     ./explorer start [x=<int>] [z=<int>] [range=<int>] [id=<AgentID>]
     ```
-    *   Starts exploration.
+    Starts exploration.
     *   `x`, `z`: *(Optional)* Coordinates. Default: player's position.
     *   `range`: *(Optional)* Scanning radius. Default: 15.
     *   `id`: *(Optional)* Unique identifier (e.g., `explorer1`) to execute the command on a specific instance. Default: The command executes for all instances.
@@ -62,7 +62,7 @@ Responsible for scanning the terrain and reporting flat zones.
     ```text
     ./explorer set range <int> [id=<AgentID>]
     ```
-    *   Updates the scanning radius without restarting.
+    Updates the scanning radius without restarting.
     *   `int`: value of the new scanning radius.
     *   `id`: *(Optional)* Unique identifier (e.g., `explorer1`) to execute the command on a specific instance. Default: The command executes for all instances.
 
@@ -75,7 +75,7 @@ Responsible for obtaining resources.
     ```text
     ./miner start [x=<int>] [y=<int>] [z=<int>] [id=<AgentID>]
     ```
-    *   Starts mining.
+    Starts mining.
     *   `x`, `y`, `z`: *(Optional)* Coordinates. Default: player's position.
     *   `id`: *(Optional)* Unique identifier (e.g., `miner1`) to execute the command on a specific instance. Default: The command executes for all instances.
     *   Default strategy: gridStrategy
@@ -84,7 +84,7 @@ Responsible for obtaining resources.
     ```text
     ./miner set strategy <vertical|grid|vein> [id=<AgentID>]
     ```
-    *   Dynamically changes the mining strategy.
+    Dynamically changes the mining strategy.
     *   `vertical`: Vertical mining.
     *   `grid`: Grid mining.
     *   `vein`: Vein mining.
@@ -94,7 +94,7 @@ Responsible for obtaining resources.
     ```text
     ./miner fulfill [id=<AgentID>]
     ```
-    *   Starts gathering based on the "Bill of Materials" (BOM) received from BuilderBot.
+    Starts gathering based on the "Bill of Materials" (BOM) received from BuilderBot.
     *   `id`: *(Optional)* Unique identifier (e.g., `miner1`) to execute the command on a specific instance. Default: The command executes for all instances.
 
 ---
@@ -102,35 +102,35 @@ Responsible for obtaining resources.
 ### BuilderBot Specific Commands
 Responsible for managing plans and building structures block by block.
 
-1.  **`start`**
+1.  **`build`**
     ```text
     ./builder build [id=<AgentID>]
     ```
-    *   Starts construction at the position found by ExplorerBot.
+    Starts construction at the position found by ExplorerBot.
     *   `id`: *(Optional)* Unique identifier (e.g., `builder1`) to execute the command on a specific instance. Default: The command executes for all instances.
 
 2.  **`plan list`**
     ```text
     ./builder plan list [id=<AgentID>]
     ```
-    *   Shows all available designs (`.schem`) in `builder_structures/` in the chat.
+    Shows all available designs (`.schem`) in `builder_structures/` in the chat.
     *   `id`: *(Optional)* Unique identifier (e.g., `builder1`) to execute the command on a specific instance. Default: The command executes for all instances.
 
 
-2.  **`plan set`**
+3.  **`plan set`**
     ```text
     ./builder plan set <Template> [id=<AgentID>]
     ```
-    *   Assigns the design to build.
+    Assigns the design to build.
     *   `<Template>`: Name of the design to build (e.g., `small_medieval_hovel`).
     *   `id`: *(Optional)* Unique identifier (e.g., `builder1`) to execute the command on a specific instance. Default: The command executes for all instances.
    
 
-3.  **`bom`** (Bill Of Materials)
+4.  **`bom`** (Bill Of Materials)
     ```text    
     ./builder bom [id=<AgentID>]
     ```
-    *   Forces calculation and sending of the required materials list to MinerBot.
+    Forces calculation and sending of the required materials list to MinerBot.
     *   `id`: *(Optional)* Unique identifier (e.g., `builder1`) to execute the command on a specific instance. Default: The command executes for all instances.
 
 ---
@@ -139,10 +139,9 @@ Responsible for managing plans and building structures block by block.
 Automates the coordination of all bots (Exploration -> Design -> Mining -> Construction).
 
 ```text
-./workflow run [x=<int>] [z=<int>] [range=<int>] [template=<name>] [miner.strategy=<vertical|grid|vein>] [miner.x=<int>miner.y=<int>miner.z=<int>]
+./workflow run [x=<int>] [z=<int>] [range=<int>] [template=<name>] [miner.strategy=<vertical|grid|vein>]
 ```
 *   `x`, `z`: *(Optional)* Central exploration coordinates. Default: current position.
 *   `range`: *(Optional)* Explorer scanning radius. Default: `15`.
 *   `template`: *(Optional)* Name of the structure to build (e.g., `small_medieval_hovel`). Default: `small_ovni`
 *   `miner.strategy`: *(Optional)* Mining strategy (`vertical`, `grid`, `vein`). Default: `gridStrategy`.
-*   `miner.x`, `miner.y`, `miner.z`: *(Optional)* Mining coordinates. Default: current position.

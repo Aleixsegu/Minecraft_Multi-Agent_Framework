@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Any, List
+from typing import Dict
 from mcpi.minecraft import Minecraft
 from utils.logging import Logger
 

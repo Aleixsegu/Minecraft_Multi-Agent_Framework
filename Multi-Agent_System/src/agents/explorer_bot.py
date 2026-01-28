@@ -3,6 +3,7 @@ import asyncio
 import datetime
 from agents.base_agent import BaseAgent
 from agents.state_model import State
+
 class ExplorerBot(BaseAgent):
     """
     ExplorerBot:
@@ -15,11 +16,11 @@ class ExplorerBot(BaseAgent):
         super().__init__(agent_id, mc, bus)
         self.posX = 0
         self.posZ = 0     
-        self.range = 15                        # rango por defecto
+        self.range = 15 # rango por defecto
 
     async def perceive(self):
         try:
-            # Checkeo rápido de mensajes
+            # Comprovar mensajes
             msg = await asyncio.wait_for(self.bus.receive(self.id), timeout=0.01)
             if msg:
                 await self.handle_incoming_message(msg)
@@ -34,25 +35,24 @@ class ExplorerBot(BaseAgent):
         """
         # Si estamos en RUNNING, verificamos el progreso de la misión
         if self.state == State.RUNNING:
-            # Check if a background task is already running
+            # Comprobar si hay una tarea en segundo plano ejecutándose
             if self.context.get("scanning_in_progress", False):
                 self.context["next_action"] = "wait_for_scan"
                 return
 
             if "target_x" in self.context and "target_z" in self.context:
                 
-                # 1. Si no hemos escaneado, decidimos ESCANEAR
+                # Si no hemos escaneado, decidimos ESCANEAR
                 if not self.context.get("scan_complete", False):
                     self.context["next_action"] = "scan_environment"
                     self.logger.info("Decisión: Iniciar tarea de escaneo (segundo plano).")
                 
-                # 2. Si ya escaneamos pero no hemos reportado, decidimos REPORTAR
-                # Note: Scanning task also reports, so this is just for state consistency
+                # Si ya escaneamos pero no hemos reportado, decidimos REPORTAR
                 elif not self.context.get("report_sent", False):
                     self.context["next_action"] = "report_zones"
                     self.logger.info("Decisión: Finalizar reporte.")
                 
-                # 3. Datos enviados, terminar misión
+                # Datos enviados, terminar misión
                 else:
                     self.context["next_action"] = "finish_mission"
                     self.logger.info("Decisión: Finalizar misión.")
@@ -79,8 +79,6 @@ class ExplorerBot(BaseAgent):
             
         elif action == "report_zones":
             self.logger.info("Marcando reporte como completado...")
-            # Scanning task handles logic, we just update state
-            await self._publish_zones() # Deprecated call, does nothing
             self.context["report_sent"] = True
             
         elif action == "finish_mission":
@@ -89,7 +87,6 @@ class ExplorerBot(BaseAgent):
             self.context["next_action"] = "idle"
             
         elif action == "wait_for_scan":
-            # Do nothing, just wait for background task
             pass
 
     def _decompose_to_rectangles(self, coords_list, min_x, min_z, max_x, max_z):
@@ -99,7 +96,7 @@ class ExplorerBot(BaseAgent):
         width_map = max_x - min_x + 1
         length_map = max_z - min_z + 1
         
-        # Grid construction
+        # Construcción de la cuadrícula
         grid = [[0 for _ in range(width_map)] for _ in range(length_map)]
         for (gx, gz) in coords_list:
             grid[gz - min_z][gx - min_x] = 1
@@ -110,7 +107,7 @@ class ExplorerBot(BaseAgent):
             best_rect = None # (r_start, c_start, r_len, c_len)
             best_area = 0
             
-            # Histogram for each row
+            # Histograma para cada fila
             heights = [0] * width_map
             
             for r in range(length_map):
@@ -120,7 +117,7 @@ class ExplorerBot(BaseAgent):
                     else:
                         heights[c] = 0
                 
-                # Largest Rectangle in Histogram
+                # Rectángulo más grande en histograma
                 stack = [] # (index, height)
                 for i, h in enumerate(heights + [0]):
                     start_index = i
@@ -132,7 +129,6 @@ class ExplorerBot(BaseAgent):
                             area = w * height
                             if area > best_area:
                                 best_area = area
-                                # Store: r_start is r - height + 1
                                 best_rect = (r - height + 1, index, height, w)
                         start_index = index
                     stack.append((start_index, h))
@@ -161,13 +157,13 @@ class ExplorerBot(BaseAgent):
         return rects
 
     async def _process_component(self, s, gold_set, cleanup_fn, color_idx_ref):
-        """Helper to decompose and process a connected component."""
+        """Ayudante para descomponer y procesar un componente conectado."""
         rects = self._decompose_to_rectangles(
             s['coords'], s['min_x'], s['min_z'], s['max_x'], s['max_z']
         )
         
         h = s['h']
-        vis_y = h # User request: "un bloque mas a bajo"
+        vis_y = h
         
         for rect in rects:
             width, length = rect['size']
@@ -190,10 +186,10 @@ class ExplorerBot(BaseAgent):
             await self.bus.publish("map.v1", msg)
             self.logger.info(f"Zona enviada: {width}x{length} (H={h})")
             
-            # Visualize with Distinct Block (Wool)
+            # Visualizar con lana
             color_idx = color_idx_ref[0]
             color_idx_ref[0] = (color_idx + 1) % 14 
-            block_data = color_idx + 1 # 1 to 14
+            block_data = color_idx + 1
             
             coord_list = rect['blocks']
             for (gx, gz) in coord_list:
@@ -203,11 +199,9 @@ class ExplorerBot(BaseAgent):
             
             asyncio.create_task(cleanup_fn(coord_list, vis_y))
 
-    # --------------------------------------------------------------------------
-    # CHECKPOINT SERIALIZATION HELPERS
-    # --------------------------------------------------------------------------
+    # Serialización de checkpoints
     def _load_scan_state(self):
-        """Deserializes scanning state from self.context."""
+        """Deserializa el estado de escaneo desde self.context."""
         data = self.context.get('scan_state')
         if not data or not data.get('has_state'):
             return None
@@ -226,24 +220,23 @@ class ExplorerBot(BaseAgent):
         stats = {}
         for k, v in data["stats"].items():
             r_k = to_tuple(k)
-            # v['coords'] is list of lists [[x,z],...] -> list of tuples
+            # v['coords'] es lista de listas [[x,z],...] -> lista de tuplas
             v['coords'] = [tuple(c) for c in v['coords']]
             stats[r_k] = v
             
-        # Parent: key="x,z" -> value=[x,z] (or "x,z" if old format? assume new)
         parent = {}
         for k, v in data["parent"].items():
             parent[to_tuple(k)] = to_tuple(v)
 
-        # Prev Cols: key="z" (str) -> value=[x,z]
+        # Prev Cols: clave="z" (str) -> valor=[x,z]
         prev_col_labels = {}
         for k, v in data["prev_col_labels"].items():
             prev_col_labels[int(k)] = to_tuple(v)
 
-        # Active Roots: list of [x,z]
+        # Active Roots: lista de [x,z]
         active_roots = {to_tuple(k) for k in data["active_roots"]}
         
-        # Local Column State (for mid-column resume)
+        # Estado de Columna Local (para reanudar a mitad de columna)
         curr_col_labels = {}
         if "curr_col_labels" in data:
             for k, v in data["curr_col_labels"].items():
@@ -260,7 +253,7 @@ class ExplorerBot(BaseAgent):
         return stats, parent, active_roots, prev_col_labels, curr_col_labels, active_roots_this_col, resume_x, resume_z
 
     def _clear_scan_state(self):
-        """Clears saved scan state from context."""
+        """Limpia el estado de escaneo guardado del contexto."""
         if 'scan_state' in self.context:
             del self.context['scan_state']
 
@@ -297,7 +290,7 @@ class ExplorerBot(BaseAgent):
         visual_active_blocks = set() 
         color_idx_ref = [0]
         
-        # --- Internal Functions ---
+        # Funciones de soporte
         def find(i):
             path = []
             while i != parent[i]:
@@ -334,7 +327,6 @@ class ExplorerBot(BaseAgent):
                 }
             return idx
         
-        # Helpers
         async def cleanup_batch_diamonds(batch):
             await asyncio.sleep(2)
             for (bx, by, bz) in batch:
@@ -351,15 +343,14 @@ class ExplorerBot(BaseAgent):
         self.logger.info(f"Escaneo R={radius}. Inicio X={current_start_x}, Z={current_start_z}")
         
         try:
-            # SCAN LOOP X
             for x in range(current_start_x, g_max_x + 1):
-                # Init per-column variables
+                # Init variables por columna
                 if x == current_start_x and restored:
-                    # Use saved partial state if resuming
+                    # Usar estado parcial guardado si se reanuda
                     curr_col_labels = saved_curr_col
                     active_roots_this_col = saved_active_this
                     z_start = current_start_z
-                    # Reset 'restored' so next columns start fresh
+                    # Resetear 'restored' para que las siguientes columnas empiecen frescas
                     restored = False 
                 else:
                     curr_col_labels = {}
@@ -368,17 +359,15 @@ class ExplorerBot(BaseAgent):
                 
                 col_diamonds = []
 
-                # SCAN LOOP Z
                 for z in range(z_start, g_max_z + 1):
-                    # Yield every iteration
                     await asyncio.sleep(0)
 
-                    # Check for Pause/Interrupt inside Z loop
+                    # Comprobar Pausa/Interrupción dentro del bucle
                     is_paused = self.context.get('paused')
                     is_interrupted = self.context.get('interrupt')
 
                     if is_paused or is_interrupted:
-                        # Save EXACT state mid-column
+                        # Guardar estado EXACTO a mitad de columna
                         self.context['scan_state'] = {
                             "stats": stats, "parent": parent, 
                             "prev_col_labels": prev_col_labels, "active_roots": active_roots,
@@ -388,13 +377,13 @@ class ExplorerBot(BaseAgent):
                         if is_paused: 
                             self.logger.info(f"Pausado en X={x}, Z={z}")
                         
-                        # Cleanup logic: remove current partial diamonds instantly so no frozen blocks
+                        # eliminar diamantes parciales actuales al instante para evitar bloques congelados
                         if col_diamonds:
                             asyncio.create_task(cleanup_batch_diamonds(col_diamonds))
                             
-                        return # Exit/Break completely
+                        return # Salir/Romper completamente
 
-                    # Radius Check
+                    # Comprobación de Radio
                     if (x - center_x)**2 + (z - center_z)**2 > radius**2:
                         continue
                     
@@ -421,8 +410,7 @@ class ExplorerBot(BaseAgent):
                     current_id = find(current_id) 
                     curr_col_labels[z] = current_id
                     active_roots_this_col.add(current_id)
-                
-                # End of column Z
+
                 if col_diamonds:
                     asyncio.create_task(cleanup_batch_diamonds(col_diamonds))
  
@@ -440,7 +428,6 @@ class ExplorerBot(BaseAgent):
                 active_roots = active_roots_this_col
                 prev_col_labels = curr_col_labels
 
-            
             if not self.context.get('interrupt') and not self.context.get('paused'):
                 for r in active_roots:
                     real_root = find(r)
@@ -456,7 +443,7 @@ class ExplorerBot(BaseAgent):
             self.logger.info("Exploración finalizada.")
             self.context["scan_complete"] = True
         elif self.context.get('paused'):
-            self.logger.info("Exploración PAUSADA.") # State saved above
+            self.logger.info("Exploración PAUSADA.")
         else:
             self.logger.info("Exploración INTERRUMPIDA (Estado Guardado).")
 
@@ -465,7 +452,6 @@ class ExplorerBot(BaseAgent):
         pass
     async def run(self):
         self.logger.info("ExplorerBot iniciado")
-        # Ensure we don't think we are scanning when we just booted up from a crash/stop
         self.context["scanning_in_progress"] = False 
         await super().run()
 
@@ -488,8 +474,8 @@ class ExplorerBot(BaseAgent):
             
             self.context['interrupt'] = True
             
-            # Wait for scanning to save state and exit
-            # We check if task is still running
+            # Esperar a que el escaneo guarde estado y salga
+            # Comprobamos si la tarea sigue corriendo
             waited = 0
             while self.context.get("scanning_in_progress", False) and waited < 50: 
                  await asyncio.sleep(0.1)
@@ -503,11 +489,11 @@ class ExplorerBot(BaseAgent):
                  self.mc.postToChat(f"[{self.id}] Ya estoy en ejecucion.")
                  return
 
-            # Reset flags
+            # Resetear flags
             self.context['interrupt'] = False
             self.context['paused'] = False
             
-            # Coordinates
+            # Coordenadas
             if "x" in payload and "z" in payload:
                 x, z = payload["x"], payload["z"]
             else:
@@ -530,31 +516,26 @@ class ExplorerBot(BaseAgent):
                 'scan_complete': False, 'report_sent': False,
                 'interrupt': False, 'paused': False
             })
-            # Clear old state if starting fresh command? 
-            # User might want to force restart. If so, clear scan_state.
-            # Assuming 'start' implies new mission.
             self._clear_scan_state()
             
             await self.set_state(State.RUNNING, "start command")
             return
             
         elif command == "pause":
-            # Just set flag. The loop will handle saving and exiting to allow state transition.
             self.context["paused"] = True
             
-            # Wait for loop to actually pause (exit function)
             waited = 0
             while self.context.get("scanning_in_progress", False) and waited < 20:
                  await asyncio.sleep(0.1)
                  waited += 1
             
-            # Now transition to PAUSED state (saves checkpoint)
+            # transición a estado PAUSED (guarda checkpoint)
             await self.set_state(State.PAUSED, "pause command")
             self.mc.postToChat(f"[{self.id}] Pausado")
             return
 
         elif command == "resume":
-            # Load from checkpoint
+            # Cargar desde checkpoint
             loaded_context = self.checkpoint.load()
             if loaded_context:
                 self.context.update(loaded_context)
@@ -562,7 +543,7 @@ class ExplorerBot(BaseAgent):
             
             self.context["paused"] = False
             self.context["interrupt"] = False
-            self.context["scanning_in_progress"] = False # Unlock decide loop
+            self.context["scanning_in_progress"] = False
             
             self.mc.postToChat(f"[{self.id}] Reanudado")
             await self.set_state(State.RUNNING, "resume command")
@@ -589,10 +570,8 @@ class ExplorerBot(BaseAgent):
              return
 
         elif command == "help":
-             msg = f"[{self.id}] Ayuda: start, set <range>, pause, resume, stop"
+             msg = f"[{self.id}] Comandos específicos: start [x=<int>] [z=<int>] [range=<int>] [id=<AgentID>] | set range <int> [id=<AgentID>]"
              self.mc.postToChat(msg)
              pass 
 
         await super().handle_command(command, payload)
-
-

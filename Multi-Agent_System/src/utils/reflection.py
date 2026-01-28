@@ -6,7 +6,6 @@ from strategies.mining_strategy import MiningStrategy
 from utils.logging import Logger
 from utils.schematic_parser import SchematicParser
 
-
 # Inicializar logger compartido
 logger = Logger("Reflection")
 
