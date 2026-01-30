@@ -269,6 +269,9 @@ class MinerBot(BaseAgent):
              self.context['next_action'] = 'idle' 
 
         elif action == 'mine_physical':
+            if self.context.get('interrupt'):
+                 return
+
             if self.strategy:
                 strat_name = self.strategy.__class__.__name__
 
@@ -436,6 +439,9 @@ class MinerBot(BaseAgent):
             if x is not None and z is not None:
                 self.context.update({'target_x': x, 'target_z': z})
                 self.mc.postToChat(f"[{self.id}] Posicion manual: ({x}, {z})")
+                self.context['arrived_at_mine'] = False
+                self.context['mining_active'] = True
+                await self.set_state(State.RUNNING, "Manual Start with Coords")
             else:
                 self._calculate_random_zone()
                 self.context['arrived_at_mine'] = False

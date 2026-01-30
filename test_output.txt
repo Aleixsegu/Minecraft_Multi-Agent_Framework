@@ -1,0 +1,86 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.12.10, pytest-9.0.2, pluggy-1.6.0 -- C:\Users\Usuario\Desktop\PC\UNI\TERCERO\TAP\PRACTICA\Minecraft_Multi-Agent_Framework\venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: C:\Users\Usuario\Desktop\PC\UNI\TERCERO\TAP\PRACTICA\Minecraft_Multi-Agent_Framework
+configfile: pytest.ini
+plugins: asyncio-1.3.0, cov-7.0.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 8 items
+
+Multi-Agent_System/tests/test_explorer_bot.py::TestExplorerBot::test_decompose_to_rectangles FAILED [ 12%]
+Multi-Agent_System/tests/test_explorer_bot.py::TestExplorerBot::test_handle_command_start PASSED [ 25%]
+Multi-Agent_System/tests/test_explorer_bot.py::TestExplorerBot::test_handle_command_set PASSED [ 37%]
+Multi-Agent_System/tests/test_explorer_bot.py::TestExplorerBot::test_decide_logic PASSED [ 50%]
+Multi-Agent_System/tests/test_explorer_bot.py::TestExplorerBot::test_act_execution PASSED [ 62%]
+Multi-Agent_System/tests/test_explorer_bot.py::TestExplorerBot::test_scan_and_find_zones_mocked PASSED [ 75%]
+Multi-Agent_System/tests/test_explorer_bot.py::TestExplorerBot::test_scan_pausing PASSED [ 87%]
+Multi-Agent_System/tests/test_explorer_bot.py::TestExplorerBot::test_resume_command FAILED [100%]
+
+================================== FAILURES ===================================
+________________ TestExplorerBot.test_decompose_to_rectangles _________________
+
+self = <tests.test_explorer_bot.TestExplorerBot object at 0x0000023ABA40AC00>
+bot = <agents.explorer_bot.ExplorerBot object at 0x0000023ABD113E00>
+
+    def test_decompose_to_rectangles(self, bot):
+        # 3x3 block of ones
+        coords = [
+            (0,0), (1,0), (2,0),
+            (0,1), (1,1), (2,1),
+            (0,2), (1,2), (2,2)
+        ]
+        rects = bot._decompose_to_rectangles(coords, 0, 0, 2, 2)
+        assert len(rects) == 1
+        assert rects[0]['size'] == (3,3)
+    
+        # Two separated blocks
+        coords = [(0,0), (0,1), (2,0), (2,1)]
+        rects = bot._decompose_to_rectangles(coords, 0, 0, 2, 1)
+        # Should detect two 1x2 rects (width=1, length=2)
+        # Or one? No, they are separated by col 1.
+>       assert len(rects) == 2
+E       assert 0 == 2
+E        +  where 0 = len([])
+
+Multi-Agent_System\tests\test_explorer_bot.py:35: AssertionError
+_____________________ TestExplorerBot.test_resume_command _____________________
+
+self = <tests.test_explorer_bot.TestExplorerBot object at 0x0000023ABD0CF7D0>
+bot = <agents.explorer_bot.ExplorerBot object at 0x0000023ABD1AD430>
+
+    @pytest.mark.asyncio
+    async def test_resume_command(self, bot):
+        # Mock load returning state
+        state_data = {
+            "state": "PAUSED",
+            "task_state": {},
+            "context": {"scan_state": {"has_state": True}}
+        }
+>       bot.checkpoint.load.return_value = state_data
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AttributeError: 'method' object has no attribute 'return_value'
+
+Multi-Agent_System\tests\test_explorer_bot.py:143: AttributeError
+=============================== tests coverage ================================
+______________ coverage: platform win32, python 3.12.10-final-0 _______________
+
+Name                                                Stmts   Miss  Cover   Missing
+---------------------------------------------------------------------------------
+Multi-Agent_System\src\agents\agent_factory.py         22     12    45%   15-17, 25-28, 35-43, 47
+Multi-Agent_System\src\agents\agent_manager.py         61     49    20%   13-23, 27-29, 34-42, 46-54, 57, 61-77, 83-92
+Multi-Agent_System\src\agents\base_agent.py           103     73    29%   31, 35, 39, 47-53, 55-75, 82-106, 117, 119, 124-158
+Multi-Agent_System\src\agents\explorer_bot.py         374    128    66%   22-30, 40-41, 60, 64-69, 81-82, 89-90, 209-253, 258, 277-279, 332-334, 338-341, 350-354, 382, 421, 424-426, 439-440, 445-448, 452, 454-456, 461-465, 471-485, 489-490, 504-505, 525-535, 539-550, 563-577
+Multi-Agent_System\src\agents\state_model.py            8      0   100%
+Multi-Agent_System\src\agents\workflow_manager.py      67     59    12%   7-9, 16-71, 78-93, 96-102
+Multi-Agent_System\src\messages\message_bus.py         58     43    26%   29-31, 38-46, 59-100, 105-109, 121-141
+Multi-Agent_System\src\utils\checkpoints.py            53     36    32%   14-18, 42-56, 63-69, 77-87
+Multi-Agent_System\src\utils\json_schema.py            34     29    15%   9-13, 29-73
+Multi-Agent_System\src\utils\logging.py                52     17    67%   16-23, 50, 97-98, 103-104, 112-118, 125-133
+---------------------------------------------------------------------------------
+TOTAL                                                 832    446    46%
+Coverage XML written to file coverage.xml
+=========================== short test summary info ===========================
+FAILED Multi-Agent_System/tests/test_explorer_bot.py::TestExplorerBot::test_decompose_to_rectangles - assert 0 == 2
+ +  where 0 = len([])
+FAILED Multi-Agent_System/tests/test_explorer_bot.py::TestExplorerBot::test_resume_command - AttributeError: 'method' object has no attribute 'return_value'
+========================= 2 failed, 6 passed in 0.41s =========================

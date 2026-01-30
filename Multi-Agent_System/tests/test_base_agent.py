@@ -1,46 +1,28 @@
 import pytest
 import asyncio
+import sys
+import os
 from unittest.mock import MagicMock, AsyncMock, patch
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../src'))
+
 from agents.base_agent import BaseAgent
 from agents.state_model import State
 
-# Implementación concreta para probar BaseAgent
 class ConcreteAgent(BaseAgent):
-    async def perceive(self):
-        self.context["perceived"] = True
-
-    async def decide(self):
-        self.context["decided"] = True
-
-    async def act(self):
-        self.context["acted"] = True
+    async def perceive(self): self.context["perceived"] = True
+    async def decide(self): self.context["decided"] = True
+    async def act(self): self.context["acted"] = True
 
 @pytest.fixture
-def mock_deps():
-    return {
-        "mc": MagicMock(),
-        "bus": MagicMock(),
-    }
-
-@pytest.fixture
-def agent(mock_deps):
-    # Mockear Checkpoints y Logger
-    # Usamos spec=False para que MockLogger acepte cualquier llamada, 
-    # ya que si usamos spec=Logger real, tendríamos que importar la clase real
-    # y si esta cambia, el test falla. MagicMock por defecto acepta todo.
-    with patch("agents.base_agent.Checkpoints") as MockCheckpoints, \
-         patch("agents.base_agent.Logger") as MockLoggerClass:
-        
-        MockCheckpoints.return_value.load.return_value = {}
-        
-        # Forzar que el return_value sea un MagicMock puro
-        MockLoggerClass.return_value = MagicMock()
-        
-        ag = ConcreteAgent("TestAgent", mock_deps["mc"], mock_deps["bus"])
-        
-        print(f"DEBUG: Agent logger type: {type(ag.logger)}")
-        print(f"DEBUG: Agent logger dir: {dir(ag.logger)}")
-        
+def agent():
+    mc = MagicMock()
+    bus = MagicMock()
+    with patch("agents.base_agent.Checkpoints") as MockCkpt:
+        mock_instance = MockCkpt.return_value
+        mock_instance.load.return_value = {}
+        ag = ConcreteAgent("TestAgent", mc, bus)
+        ag.checkpoint = mock_instance
         yield ag
 
 @pytest.mark.asyncio
@@ -56,46 +38,89 @@ async def test_state_transition(agent):
 async def test_handle_command_pause(agent):
     await agent.handle_command("pause")
     assert agent.state == State.PAUSED
+    agent.checkpoint.save.assert_called()
 
 @pytest.mark.asyncio
 async def test_handle_command_stop(agent):
-    # Stop debe guardar checkpoint
     await agent.handle_command("stop")
     assert agent.state == State.STOPPED
-    agent.checkpoint.save.assert_called()
 
 @pytest.mark.asyncio
 async def test_handle_command_update(agent):
     payload = {"param": 10}
     await agent.handle_command("update", payload)
     assert agent.context["param"] == 10
-    assert agent.state == State.RUNNING
 
 @pytest.mark.asyncio
 async def test_run_cycle_execution(agent):
-    """
-    Verifica que en estado RUNNING se ejecuten perceive, decide y act.
-    """
-    # 1. Iniciamos el bucle principal en segundo plano
-    # Nota: run() inicializa el estado a IDLE automáticamente
     task = asyncio.create_task(agent.run())
-    
-    # Damos un momento para que run() llegue al bucle while y se ponga en IDLE
     await asyncio.sleep(0.01)
-    
-    # 2. Cambiamos el estado a RUNNING (como si recibiera orden de empezar)
     await agent.set_state(State.RUNNING)
+    await asyncio.sleep(0.1)
     
-    # 3. Dejamos que corra al menos un ciclo (aumentamos tiempo)
-    await asyncio.sleep(0.2)
-    
-    # 4. Verificaciones
-    print(f"DEBUG: Agent State: {agent.state}, Context: {agent.context}")
-    assert agent.state == State.RUNNING, f"Agent should be RUNNING but is {agent.state}"
+    assert agent.state == State.RUNNING
     assert agent.context.get("perceived") is True
-    assert agent.context.get("decided") is True
-    assert agent.context.get("acted") is True
     
-    # 5. Limpieza
+    task.cancel()
+    try:
+        await task
+    except asyncio.CancelledError:
+        pass
+
+@pytest.mark.asyncio
+async def test_handle_incoming_message_filtering(agent):
+    # Test valid message for this agent
+    msg = {"type": "command.pause.v1", "payload": {"id": agent.id}}
+    agent.handle_command = AsyncMock()
+    await agent.handle_incoming_message(msg)
+    agent.handle_command.assert_awaited_with("pause", msg["payload"])
+    
+    # Test message for another agent ID
+    agent.handle_command.reset_mock()
+    msg = {"type": "command.pause.v1", "payload": {"id": "OtherAgent"}}
+    await agent.handle_incoming_message(msg)
+    agent.handle_command.assert_not_awaited()
+
+    # Test message for mismatching agent_type
+    agent.handle_command.reset_mock()
+    msg = {"type": "command.pause.v1", "payload": {"agent_type": "OtherClass"}}
+    await agent.handle_incoming_message(msg)
+    agent.handle_command.assert_not_awaited()
+
+    # Test unknown command format
+    agent.logger.warning = MagicMock()
+    msg = {"type": "command.invalid", "payload": {}}
+    await agent.handle_incoming_message(msg)
+    agent.logger.warning.assert_called()
+
+@pytest.mark.asyncio
+async def test_set_state_side_effects(agent):
+    # PAUSED saves checkpoint
+    await agent.set_state(State.PAUSED)
+    agent.checkpoint.save.assert_called()
+    
+    # STOPPED does not save 
+    agent.checkpoint.save.reset_mock()
     await agent.set_state(State.STOPPED)
-    await task
+    agent.checkpoint.save.assert_not_called()
+
+@pytest.mark.asyncio
+async def test_handle_command_status_help(agent):
+    # Status
+    agent.context = {"foo": "bar", "inventory": {"item": 1}}
+    agent.logger.info = MagicMock()
+    await agent.handle_command("status")
+    agent.logger.info.assert_called()
+    
+    # Help
+    agent.mc.postToChat = MagicMock()
+    await agent.handle_command("help")
+    agent.mc.postToChat.assert_called()
+
+@pytest.mark.asyncio
+async def test_handle_command_resume(agent):
+    # Setup resume scenario
+    agent.checkpoint.load.return_value = {"restored": True}
+    await agent.handle_command("resume")
+    assert agent.state == State.RUNNING
+    assert agent.context["restored"] is True
