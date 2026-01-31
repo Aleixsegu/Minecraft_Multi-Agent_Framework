@@ -1,6 +1,0 @@
-[run]
-omit =
-    */mcpi/*
-    */main.py
-    */tests/*
-    */venv/*

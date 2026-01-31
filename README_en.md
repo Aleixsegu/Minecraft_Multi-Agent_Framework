@@ -65,7 +65,8 @@ This project integrates a Minecraft server environment with a programmable multi
    ```
 4. Install dependencies:
    ```powershell
-   pip install pytest pytest-cov mock
+   pip install --upgrade pip
+   pip install pytest pytest-cov pytest-asyncio mock 
    ```
 5. Run the tests:
    ```powershell
