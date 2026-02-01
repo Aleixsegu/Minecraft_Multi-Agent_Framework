@@ -65,7 +65,8 @@ Este proyecto integra un entorno de servidor Minecraft con un sistema multi-agen
    ```
 4. Instala las dependencias:
    ```powershell
-   pip install pytest pytest-cov mock
+   pip install --upgrade pip
+   pip install pytest pytest-cov pytest-asyncio mock 
    ```
 5. Ejecuta los tests:
    ```powershell
