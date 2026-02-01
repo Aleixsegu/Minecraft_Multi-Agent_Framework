@@ -4,7 +4,7 @@
 
 Este directorio contiene el núcleo del **Sistema Multi-Agente** para Minecraft. Implementa una arquitectura basada en agentes autónomos (Explorer, Builder, Miner) que se comunican para colaborar en tareas de construcción y minería.
 
-## Agentes
+## Agentes 
 
 ### ExplorerBot
 Analiza el terreno e identifica zonas óptimas de construcción.

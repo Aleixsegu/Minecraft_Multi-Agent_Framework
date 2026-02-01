@@ -4,7 +4,7 @@
 
 This directory contains the core of the **Multi-Agent System** for Minecraft. It implements an architecture based on autonomous agents (Explorer, Builder, Miner) that communicate to collaborate on construction and mining tasks.
 
-## Agents
+## Agents 
 
 ### ExplorerBot
 Analyzes the terrain and identifies optimal zones for construction.

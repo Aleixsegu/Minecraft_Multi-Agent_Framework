@@ -1,5 +1,7 @@
 # TAP-Minecraft-Agent-Framework
 
+[![codecov](https://codecov.io/gh/Aleixsegu/Minecraft_Multi-Agent_Framework/graph/badge.svg?token=CH3K887556)](https://codecov.io/gh/Aleixsegu/Minecraft_Multi-Agent_Framework)
+
 [English](README_en.md)
 
 Este proyecto integra un entorno de servidor Minecraft con un sistema multi-agente programable en Python, orientado a la experimentación y desarrollo de agentes inteligentes dentro del mundo de Minecraft.
