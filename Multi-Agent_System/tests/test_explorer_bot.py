@@ -121,8 +121,6 @@ class TestExplorerBot:
         }
         bot.context['scan_state'] = complex_state
         
-        # We can call internal method directly to verify
-        # (Assuming it's not private-private, but it is _load...)
         result = bot._load_scan_state()
         
         assert result is not None
@@ -180,3 +178,37 @@ class TestExplorerBot:
         msg = {"source": "Unknown", "target": "BROADCAST", "type": "test"}
         with patch('asyncio.wait_for', return_value=msg):
              await bot.perceive()
+
+
+
+    @pytest.mark.asyncio
+    async def test_act_report_zones(self, bot):
+        bot.context['next_action'] = 'report_zones'
+        bot.bus.publish = AsyncMock()
+        await bot.act()
+        # bot.bus.publish.assert_called() # Not called here
+        assert bot.context['report_sent'] is True
+
+    @pytest.mark.asyncio
+    async def test_scan_and_find_interrupted(self, bot):
+        bot.context['target_x'] = 0
+        bot.context['target_z'] = 0
+        bot.context['interrupt'] = True
+        bot.context['scan_complete'] = False
+        await bot._scan_and_find_zones()
+        # Should exit loop early, no scan_state returned
+        assert bot.context.get('scan_complete') is False
+
+    @pytest.mark.asyncio
+    async def test_scan_exception_height(self, bot):
+        bot.context['target_x'] = 0
+        bot.context['target_z'] = 0
+        bot.range = 2
+        
+        # getHeight fails
+        bot.mc.getHeight.side_effect = Exception("MC Error")
+        
+        await bot._scan_and_find_zones()
+        # Code catches exception inside loop -> log error -> continue/break
+        # Just ensure it doesn't crash the test
+        assert True

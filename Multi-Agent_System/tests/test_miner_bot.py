@@ -188,3 +188,208 @@ class TestMinerBot:
         with patch('utils.reflection.get_all_strategies', return_value={"MockStrat": mock_cls}):
              bot.load_strategy_dynamically("Mock")
              assert isinstance(bot.strategy, MagicMock)
+
+# --- Extended Tests ---
+
+@pytest.fixture
+def mock_extended_message_bus():
+    mock = MagicMock()
+    mock.subscribe = MagicMock()
+    mock.publish = AsyncMock()
+    mock.receive = AsyncMock()
+    return mock
+
+@pytest.fixture
+def extended_bot(mock_mc, mock_extended_message_bus):
+    bot = MinerBot("Miner_Test", mock_mc, mock_extended_message_bus)
+    bot.logger = MagicMock()
+    with patch('utils.reflection.get_all_strategies', return_value={}):
+        bot.load_strategy_dynamically("GridStrategy")
+    # Reset context for clean testing
+    bot.context['partners'] = {}
+    bot.context['forbidden_zones'] = []
+    return bot
+
+@pytest.mark.asyncio
+async def test_perceive_filtering_partners(extended_bot):
+    bot = extended_bot
+    bot.context['partners'] = {'Explorer': 'ExplorerBot_1'}
+    
+    msg = {"source": "StrangeAgent", "target": "Miner_Test", "type": "some.type", "payload": {}}
+    bot.bus.receive.side_effect = [msg, asyncio.TimeoutError]
+    
+    bot.handle_incoming_message = AsyncMock()
+    
+    await bot.perceive()
+    
+    bot.handle_incoming_message.assert_not_called()
+
+@pytest.mark.asyncio
+async def test_perceive_region_lock_unlock(extended_bot):
+    bot = extended_bot
+    msg_lock = {"source": "OtherBot", "target": "BROADCAST", "type": "region.lock.v1", "payload": {"zone": "ZoneA"}}
+    msg_unlock = {"source": "OtherBot", "target": "BROADCAST", "type": "region.unlock.v1", "payload": {"zone": "ZoneA"}}
+    
+    bot.bus.receive.side_effect = [msg_lock, msg_unlock, asyncio.TimeoutError]
+    bot.handle_incoming_message = AsyncMock() 
+    
+    bot.bus.receive.side_effect = [msg_lock]
+    await bot.perceive()
+    assert "ZoneA" in bot.context['forbidden_zones']
+    
+    bot.bus.receive.side_effect = [msg_unlock]
+    await bot.perceive()
+    assert "ZoneA" not in bot.context['forbidden_zones']
+
+@pytest.mark.asyncio
+async def test_process_bom_without_build_pos(extended_bot):
+    bot = extended_bot
+    payload = {"requirements": {"stone": 10}}
+    with patch.object(bot, '_calculate_random_zone') as mock_calc:
+        bot._process_bom(payload)
+        mock_calc.assert_called_once()
+    
+    assert bot.context['target_y'] is None
+    assert bot.context['mining_active'] is True
+
+@pytest.mark.asyncio
+async def test_act_acquire_lock(extended_bot):
+    bot = extended_bot
+    bot.context['next_action'] = 'acquire_lock'
+    bot.context['target_x'] = 100
+    bot.context['target_z'] = 100
+    
+    await bot.act()
+    
+    assert bot.context['has_lock'] is True
+    assert bot.context['current_zone'] is not None
+    bot.bus.publish.assert_called()
+
+@pytest.mark.asyncio
+async def test_act_finish_delivery(extended_bot):
+    bot = extended_bot
+    bot.context['next_action'] = 'finish_delivery'
+    bot.context['has_lock'] = True
+    bot.context['current_zone'] = "ZoneA"
+    
+    await bot.act()
+    
+    assert bot.context['has_lock'] is False
+    assert bot.context['current_zone'] is None
+    assert bot.state == State.IDLE
+
+@pytest.mark.asyncio
+async def test_act_initial_mine_failure(extended_bot):
+    bot = extended_bot
+    bot.context['next_action'] = 'initial_mine'
+    bot.context['target_x'] = 100
+    bot.context['target_z'] = 100
+    bot.mc.getHeight.return_value = 0
+    
+    await bot.act()
+    
+    assert bot.context['target_y'] == 70
+    assert bot.context['arrived_at_mine'] is True
+
+@pytest.mark.asyncio
+async def test_handle_command_status(extended_bot):
+    bot = extended_bot
+    bot.state = State.RUNNING
+    bot.context['target_x'] = 10
+    bot.context['target_y'] = 64
+    bot.context['target_z'] = 10
+    bot.strategy = None
+
+    await bot.handle_command("status")
+    
+    bot.mc.postToChat.assert_called()
+    args, _ = bot.mc.postToChat.call_args
+    msg = args[0]
+    assert "[Miner_Test] Status: RUNNING" in msg
+    assert "(10, 64, 10)" in msg
+
+@pytest.mark.asyncio
+async def test_handle_command_help(extended_bot):
+    await extended_bot.handle_command("help")
+    extended_bot.mc.postToChat.assert_called()
+
+@pytest.mark.asyncio
+async def test_handle_command_start_no_coords(extended_bot):
+    bot = extended_bot
+    with patch.object(bot, '_calculate_random_zone') as mock_calc:
+        await bot.handle_command("start", {})
+        mock_calc.assert_called()
+    assert bot.state == State.RUNNING
+
+@pytest.mark.asyncio
+async def test_handle_command_load_strategy_not_found(extended_bot):
+    bot = extended_bot
+    with patch('utils.reflection.get_all_strategies', return_value={}):
+        await bot.handle_command("set", {"strategy": "NonExistent"})
+    bot.mc.postToChat.assert_called_with(f"[{bot.id}] Estrategia 'NonExistent' no encontrada.")
+    
+@pytest.mark.asyncio
+async def test_handle_command_fulfill_without_bom(extended_bot):
+    extended_bot.bom_received = False
+    await extended_bot.handle_command("fulfill")
+    extended_bot.mc.postToChat.assert_called_with(f"[{extended_bot.id}] Sin BOM.")
+
+@pytest.mark.asyncio
+async def test_act_mine_physical_reset_on_error(extended_bot):
+    bot = extended_bot
+    bot.context['next_action'] = 'mine_physical'
+    bot.context['target_y'] = 0 
+    bot.context['target_x'] = 100
+    
+    bot.strategy = MagicMock()
+    bot.strategy.__class__.__name__ = "VerticalStrategy"
+    bot.mc.getHeight.return_value = -1 
+    
+    await bot.act()
+    
+    assert bot.context['target_x'] == 105 
+    assert bot.context['target_y'] == 80
+
+@pytest.mark.asyncio
+async def test_act_mine_physical_limit_reached(extended_bot):
+    bot = extended_bot
+    bot.context['next_action'] = 'mine_physical'
+    bot.strategy = MagicMock()
+    bot.strategy.__class__.__name__ = "VerticalStrategy"
+    bot.strategy.mine = AsyncMock(return_value=False)
+    
+    bot.context['mining_attempts'] = 4
+    bot.context['tasks_physical'] = {'stone': 10}
+    bot.context['requirements'] = {'stone': 10}
+    bot.context['inventory'] = {}
+    
+    bot.mc.getHeight.return_value = 70
+
+    await bot.act()
+    
+    assert bot.context['mining_attempts'] == 5
+    assert bot.context['inventory']['stone'] == 10
+
+@pytest.mark.asyncio
+async def test_act_mine_physical_change_zone(extended_bot):
+    bot = extended_bot
+    bot.context['next_action'] = 'mine_physical'
+    bot.strategy = MagicMock()
+    bot.strategy.__class__.__name__ = "GridStrategy"
+    bot.strategy.mine = AsyncMock(return_value=False)
+    
+    bot.context['mining_attempts'] = 0
+    bot.context['target_x'] = 100
+    bot.context['target_z'] = 100
+    
+    import time
+    bot.context['mining_start_time'] = time.time()
+    
+    bot.mc.getHeight.return_value = 70
+    
+    bot._calculate_random_zone = MagicMock()
+    
+    await bot.act()
+    
+    bot._calculate_random_zone.assert_called()
+    bot.mc.postToChat.assert_called()

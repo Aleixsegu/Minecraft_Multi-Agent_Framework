@@ -293,8 +293,8 @@ class MinerBot(BaseAgent):
                         return
 
                 # Validación de altura
-                current_target_y = self.context.get('target_y', 0)
-                if current_target_y <= 0:
+                current_target_y = self.context.get('target_y')
+                if current_target_y is None or current_target_y <= 0:
                      try:
                         current_target_y = self.mc.getHeight(self.context['target_x'], self.context['target_z'])
                         self.context['target_y'] = current_target_y
