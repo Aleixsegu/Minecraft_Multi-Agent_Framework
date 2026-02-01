@@ -18,18 +18,18 @@ class BuilderBot(BaseAgent):
     def __init__(self, agent_id, mc, bus):
         super().__init__(agent_id, mc, bus)     
         self.context.update({
-            'current_plan': None,
+            'current_plan': None, #Plano que se va a contruir
             'task_phase': 'IDLE', # estado por defecto
-            'target_position': None,
+            'target_position': None, #Posición donde se va a contruir
             'plan_data': None, # Almacena lista de bloques para construir
-            'requirements': None,
-            'inventory': {},
-            'build_index': 0,
-            'last_missing_msg_time': 0
+            'requirements': None, #Requisitos de materiales para construir
+            'inventory': {}, # Almacena inventario del builderBot, aquí se van guardando los bloques que va mandando el minero
+            'build_index': 0, # Indice de construcción donde se va poner el primer bloque
+            'last_missing_msg_time': 0 # Tiempo del último mensaje de materiales faltantes
         })
         BuilderBot.instances.append(agent_id)
         
-        # Plan por defecto: Penúltima estructura (small_ovni)
+        # Plan por defecto: Penúltima estructura (small_ovni) cargamos una por defecto
         try:
              structures = get_all_structures(STRUCTURES_DIR)
              names = sorted(list(structures.keys()))
